@@ -16,7 +16,7 @@ function uuid_(){return Utilities.getUuid();}
 function status_(s){return ({'대기':'pending','승인대기':'pending','인정':'approved','반려':'rejected','해제':'disabled','활동중':'active'})[s]||s;}
 function fail_(message){throw Error(message);}
 function ownerEditor_(){const a=Session.getActiveUser().getEmail(),b=Session.getEffectiveUser().getEmail();if(!a||a!==b)fail_('소유자만 실행할 수 있습니다.');}
-function install(){ownerEditor_();const p=PropertiesService.getScriptProperties();if(!p.getProperty('OWNER_KEY')){const k=uuid_().replace(/-/g,'')+uuid_().replace(/-/g,'');p.setProperty('OWNER_KEY',k);p.setProperty('OWNER_KEY_HASH',hash_(k));}book_().setSpreadsheetTimeZone('Asia/Seoul');tab_('설정').getRange('B2').setValue('웹 앱 배포 후 연결 URL 등록 필요');onOpen();return '설치 완료. 시트의 LK 테크 메뉴에서 관리자 접속키를 확인하세요.';}
+function install(){ownerEditor_();ensureSheets_();const p=PropertiesService.getScriptProperties();if(!p.getProperty('OWNER_KEY')){const k=uuid_().replace(/-/g,'')+uuid_().replace(/-/g,'');p.setProperty('OWNER_KEY',k);p.setProperty('OWNER_KEY_HASH',hash_(k));}book_().setSpreadsheetTimeZone('Asia/Seoul');tab_('설정').getRange('B2').setValue('웹 앱 배포 후 연결 URL 등록 필요');onOpen();return '설치 완료. 시트의 LK 테크 메뉴에서 관리자 접속키를 확인하세요.';}
 function onOpen(){SpreadsheetApp.getUi().createMenu('LK 테크').addItem('관리자 접속키 보기','showOwnerKey').addToUi();}
 function showOwnerKey(){ownerEditor_();const k=PropertiesService.getScriptProperties().getProperty('OWNER_KEY');if(!k)fail_('먼저 install을 실행하세요.');SpreadsheetApp.getUi().alert('관리자 전용 접속키',k,SpreadsheetApp.getUi().ButtonSet.OK);}
 function actor_(p){if(typeof p.token!=='string'||!/^([a-f0-9]{64})$/.test(p.token))fail_('기기 저장 기능을 허용하고 새로고침하세요.');const properties=PropertiesService.getScriptProperties(),keyHash=properties.getProperty('OWNER_KEY_HASH');const owner=!!(keyHash&&typeof p.ownerKey==='string'&&hash_(p.ownerKey)===keyHash);const id=owner?'owner':'guest:'+hash_(p.token),entry=rows_('관리자신청').find(r=>r.v[0]===id);return {id,owner,admin:owner||status_(entry?.v[4])==='active',name:owner?'운영자':entry?.v[2]||'',staffStatus:entry?status_(entry.v[4]):null};}
@@ -42,9 +42,93 @@ function dispatch_(p){
  if(path==='attendance' || path==='attendance/admin'){if(method!=='GET'||!/^20[0-9]{2}-(0[1-9]|1[0-2])$/.test(month))fail_('조회 월을 확인하세요.');if(path==='attendance/admin'&&!a.admin)fail_('관리자만 볼 수 있습니다.');const filtered=rows_('근태기록').filter(r=>storedDay_(r.v[3]).slice(0,7)===month&&(path==='attendance/admin'||r.v[1]===a.id));if(path==='attendance')return {id:a.id,month,events:filtered.map(r=>event_(r.v))};const ids=[...new Set(filtered.map(r=>r.v[1]))];return ids.map(id=>({id,month,events:filtered.filter(r=>r.v[1]===id).map(r=>event_(r.v))}));}
  if(path==='attendance/record'&&method==='POST'){if(b.consent!==true)fail_('위치·시간 정보 저장에 동의하세요.');if(!['in','out'].includes(b.kind))fail_('출퇴근 구분을 확인하세요.');if(!Number.isFinite(b.lat)||!Number.isFinite(b.lng)||Math.abs(b.lat)>90||Math.abs(b.lng)>180||!Number.isFinite(b.accuracy)||b.accuracy<=0||b.accuracy>100)fail_('위치 오차가 100m 이하일 때 현장에서 다시 시도하세요.');const sr=rows_('근무지').find(r=>r.v[0]===b.siteId);if(!sr)fail_('등록된 근무지를 선택하세요.');const s=site_(sr.v),distance=distance_(s,{lat:b.lat,lng:b.lng});if(distance>s.radius)fail_('근무지 허용 반경 밖입니다.');const day=day_(new Date()),today=rows_('근태기록').filter(r=>r.v[1]===a.id&&storedDay_(r.v[3])===day);if(today.some(r=>r.v[4]===b.kind&&status_(r.v[13])!=='rejected'))fail_('오늘 기록이 이미 있습니다.');const arrival=today.find(r=>r.v[4]==='in'&&status_(r.v[13])!=='rejected');if(b.kind==='out'&&(!arrival||arrival.v[6]!==s.id))fail_('오늘 출근한 근무지에서 퇴근을 기록하세요.');if(today.length>=6)fail_('일일 기록 한도입니다.');const app=rows_('작업자신청').filter(r=>r.v[1]===a.id).at(-1),name=app?.v[3]||a.name||String(b.name||'').trim();if(!name||name.length>40)fail_('이름을 입력하세요.');const v=[uuid_(),a.id,name,day,b.kind,now,s.id,s.name,s.address,b.lat,b.lng,b.accuracy,Math.round(distance),'pending','','','',s.lat,s.lng,s.radius];add_('근태기록',v);return event_(v);}
  if(path==='attendance/review'&&method==='POST'){if(!a.admin)fail_('관리자만 확인할 수 있습니다.');if(b.id===a.id)fail_('본인의 기록은 다른 관리자가 확인해야 합니다.');if(!['approved','rejected'].includes(b.status))fail_('승인·반려를 선택하세요.');const r=rows_('근태기록').find(r=>r.v[0]===b.eventId&&r.v[1]===b.id&&storedDay_(r.v[3]).slice(0,7)===b.month);if(!r||status_(r.v[13])!=='pending')fail_('기록이 없거나 이미 확인했습니다.');if(b.status==='rejected'&&!String(b.reason||'').trim())fail_('반려 사유를 입력하세요.');r.v[13]=b.status;r.v[14]=now;r.v[15]=a.name;r.v[16]=String(b.reason||'').slice(0,200);update_('근태기록',r.row,r.v);return event_(r.v);}
+ if(path==='workers')return workers_(a,method,b);
+ if(path==='payroll'){if(method!=='GET'||!a.admin)fail_('승인된 관리자만 볼 수 있습니다.');if(!/^20[0-9]{2}-(0[1-9]|1[0-2])$/.test(month))fail_('조회 월을 확인하세요.');return payroll_(month);}
  fail_('지원하지 않는 요청입니다.');
 }
 function doGet(){return ContentService.createTextOutput(JSON.stringify({ok:true,storage:'Google Sheets',version:1})).setMimeType(ContentService.MimeType.JSON);}
 function doPost(e){let p,output;const lock=LockService.getScriptLock();try{const raw=e.parameter?.payload||e.postData?.contents||'';if(raw.length>12000)fail_('요청이 너무 깁니다.');p=JSON.parse(raw);if(p.origin!==WEB_ORIGIN)fail_('요청 출처 오류');if(!lock.tryLock(10000))fail_('다른 요청 처리 중입니다. 다시 시도하세요.');output={ok:true,data:dispatch_(p)};}catch(error){output={ok:false,error:String(error.message||error)};}finally{if(lock.hasLock())lock.releaseLock();}if(p?.bridgeNonce&&/^[a-f0-9]{32}$/.test(p.bridgeNonce)){const safe=JSON.stringify({bridgeNonce:p.bridgeNonce,result:output}).replace(/</g,'\\u003c');return HtmlService.createHtmlOutput('<!doctype html><meta charset="utf-8"><script>window.top.postMessage('+safe+','+JSON.stringify(WEB_ORIGIN)+');</script>').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);}return ContentService.createTextOutput(JSON.stringify(output)).setMimeType(ContentService.MimeType.JSON);}
 
-function answer_(t){if(/회사|업체|모집주체|LK|엘케이/.test(t))return 'LK 테크 모집 안내입니다. 업무는 반도체 자동화설비 조립·제작이며, 근무 형태는 프리랜서입니다. 프리랜서 신청에서 이름과 연락처를 남겨주시면 담당자가 확인 후 연락드립니다.';if(/나이|연령|성별|남성|여성|지원 자격/.test(t))return '나이·성별 제한 없이 설비 조립 작업이 가능한 분을 모집합니다. 초보도 지원할 수 있으며 성실한 출근과 근태를 중요하게 봅니다. 채용은 담당자 확인 후 확정됩니다.';if(/급여|일급|얼마|교통비|식대/.test(t)&&! /지급|언제|잔업|세금|실수령/.test(t))return '일급은 초급(자재 입고·부품 분류) 14만원, 중급(가조립) 15~16만원, 숙련(핵심 부품 조립·설치·셋업, 유경험자) 17만원 이상입니다. 모두 식대·교통비 포함이며 성별과 관계없이 담당 공정·경력·숙련도를 기준으로 정합니다. 근무 형태는 프리랜서입니다.';if(/프리랜서|근무 형태|고용 형태|연락처|전화번호|카카오/.test(t))return '근무 형태는 프리랜서입니다. 프리랜서 신청에서 이름과 연락처를 남겨주시면 담당자가 확인 후 연락드립니다.';if(/숙소|기숙사/.test(t))return '숙소는 제공하지 않습니다.';if(/준비|공구|렌치|가위/.test(t))return '기본공구, 렌치 세트, 작업용 가위를 준비해 주세요.';if(/근무시간|근무일|요일|평일|주말|토요일|일요일|몇 시|몇시/.test(t))return '기본 평일(월~금), 근무시간은 08:30~17:30입니다. 휴게시간·잔업·주말 근무 여부는 담당자 확인이 필요합니다.';if(/근무지|지역|어디/.test(t))return '모집 지역은 둔포·직산·평택입니다. 실제 배치 주소는 담당자가 확인해 안내합니다.';if(/하는 일|업무|조립/.test(t))return '반도체 자동화설비 조립·제작 업무입니다. LK 테크 모집 안내이며 삼성 직접 채용 공고가 아닙니다. 실제 계약 상대방과 계약 조건은 담당자에게 확인해 주세요.';if(/초보|경력/.test(t))return '초보 지원이 가능합니다. 성실한 출근과 근태를 중요하게 봅니다. 채용과 출근 확정은 담당자가 안내합니다.';return null;}
+function answer_(t){if(/회사|업체|모집주체|LK|엘케이/.test(t))return 'LK 테크 모집 안내입니다. 업무는 반도체 자동화설비 조립·제작이며, 근무 형태는 일용직(근로계약 체결, 고용·산재보험 가입)입니다. 작업자 신청에서 이름과 연락처를 남겨주시면 담당자가 확인 후 연락드립니다.';if(/나이|연령|성별|남성|여성|지원 자격/.test(t))return '나이·성별 제한 없이 설비 조립 작업이 가능한 분을 모집합니다. 초보도 지원할 수 있으며 성실한 출근과 근태를 중요하게 봅니다. 채용은 담당자 확인 후 확정됩니다.';if(/급여|일급|얼마|교통비|식대/.test(t)&&! /지급|언제|잔업|세금|실수령/.test(t))return '일급은 초급(자재 입고·부품 분류) 14만원, 중급(가조립) 15~16만원, 숙련(핵심 부품 조립·설치·셋업, 유경험자) 17만원 이상입니다. 모두 세전 금액이며 식대·교통비 포함입니다. 성별과 관계없이 담당 공정·경력·숙련도를 기준으로 정합니다. 일용근로소득은 하루 15만원까지 비과세라 세금 부담이 거의 없습니다.';if(/프리랜서|일용|근무 형태|고용 형태|보험|연락처|전화번호|카카오/.test(t))return '근무 형태는 일용직입니다. 근로계약서를 작성하고 고용보험·산재보험에 가입합니다. 작업자 신청에서 이름과 연락처를 남겨주시면 담당자가 확인 후 연락드립니다.';if(/숙소|기숙사/.test(t))return '숙소는 제공하지 않습니다.';if(/준비|공구|렌치|가위/.test(t))return '기본공구, 렌치 세트, 작업용 가위를 준비해 주세요.';if(/근무시간|근무일|요일|평일|주말|토요일|일요일|몇 시|몇시/.test(t))return '기본 평일(월~금), 근무시간은 08:30~17:30입니다. 휴게시간은 1시간이며, 잔업·주말 근무 여부는 담당자 확인이 필요합니다.';if(/근무지|지역|어디/.test(t))return '모집 지역은 둔포·직산·평택입니다. 실제 배치 주소는 담당자가 확인해 안내합니다.';if(/하는 일|업무|조립/.test(t))return '반도체 자동화설비 조립·제작 업무입니다. LK 테크가 도급받은 현장에서 LK 테크 현장책임자의 지도 아래 근무하며, 삼성 직접 채용 공고가 아닙니다.';if(/초보|경력/.test(t))return '초보 지원이 가능합니다. 성실한 출근과 근태를 중요하게 봅니다. 채용과 출근 확정은 담당자가 안내합니다.';return null;}
+
+/* ===== 인력 관리: 작업자 명부 · 공정별 일급 · 월간 정산 ===== */
+const SCHEMA = {
+  '작업자신청':['신청ID','방문자ID','접수시각','이름','전화번호','상태','관리메모'],
+  '관리자신청':['방문자ID','신청시각','이름','전화번호','권한상태','승인시각','승인자'],
+  '근태기록':['기록ID','방문자ID','이름','근무일','구분','기록시각','근무지ID','근무지명','주소','위도','경도','위치오차(m)','거리(m)','승인상태','확인시각','확인자','반려사유','근무지위도','근무지경도','허용반경(m)'],
+  '근무지':['근무지ID','근무지명','주소','위도','경도','허용반경(m)'],
+  '상담기록':['방문자ID','시각','발신구분','내용','담당자'],
+  '알림대기':['알림ID','접수시각','구분','이름','전화번호','발송상태','발송시각'],
+  '작업자':['작업자ID','방문자ID','이름','전화번호','등급','일급','상태','등록일','메모'],
+  '설정':['항목','값']
+};
+/** 없는 시트만 만들고 기존 시트는 건드리지 않습니다. */
+function ensureSheets_(){const b=book_();for(const [name,head] of Object.entries(SCHEMA)){if(!b.getSheetByName(name)){const s=b.insertSheet(name);s.getRange(1,1,1,head.length).setValues([head]);s.setFrozenRows(1);}}}
+
+/** 공정 등급별 기본 일급(세전, 식대·교통비 포함). 작업자별로 수정 가능. */
+const GRADES = {
+  '초급':{label:'초급 · 자재 입고·부품 분류',wage:140000},
+  '중급':{label:'중급 · 가조립',wage:150000},
+  '숙련':{label:'숙련 · 핵심 부품 조립·설치·셋업',wage:170000}
+};
+const RULES = {dailyExempt:150000,rate:0.06,taxCredit:0.55,localRate:0.1,employmentRate:0.009,smallTaxLimit:1000,enrollDays:8,enrollHours:60,warnDays:6,breakHours:1};
+
+function worker_(v){return {id:String(v[0]),visitorId:String(v[1]||''),name:String(v[2]),phone:String(v[3]||''),grade:String(v[4]),wage:Number(v[5]),status:status_(v[6]),registered:stamp_(v[7]),memo:String(v[8]||'')};}
+
+function workers_(a,method,b){
+  if(!a.admin)fail_('승인된 관리자만 볼 수 있습니다.');
+  if(method==='GET'){
+    const list=rows_('작업자').map(r=>worker_(r.v)),known=new Set(list.map(w=>w.visitorId).filter(Boolean)),seen=new Set();
+    const applicants=rows_('작업자신청').slice().reverse().filter(r=>{const id=String(r.v[1]);if(known.has(id)||seen.has(id))return false;seen.add(id);return true;}).map(r=>({visitorId:String(r.v[1]),name:String(r.v[3]),phone:String(r.v[4]),submitted:stamp_(r.v[2])}));
+    return {grades:GRADES,workers:list,applicants};
+  }
+  if(method!=='POST')fail_('지원하지 않는 요청입니다.');
+  if(!a.owner)fail_('작업자 등록·수정은 운영자만 할 수 있습니다.');
+  const name=typeof b.name==='string'?b.name.trim():'',phone=typeof b.phone==='string'?b.phone.replace(/[\s-]/g,''):'';
+  if(!name||name.length>40)fail_('이름을 1~40자로 입력하세요.');
+  if(phone&&!/^0[0-9]{8,10}$/.test(phone))fail_('올바른 국내 전화번호를 입력하세요.');
+  if(!GRADES[b.grade])fail_('등급을 선택하세요.');
+  const wage=Number(b.wage);if(!Number.isInteger(wage)||wage<10000||wage>1000000)fail_('일급을 1만~100만원 사이 정수로 입력하세요.');
+  const status=b.status==='ended'?'ended':'active',memo=String(b.memo||'').slice(0,200);
+  const visitorId=String(b.visitorId||'');if(visitorId&&!/^guest:[a-f0-9]{64}$/.test(visitorId))fail_('방문자 식별자를 확인하세요.');
+  const all=rows_('작업자');
+  if(visitorId&&all.some(r=>String(r.v[1])===visitorId&&String(r.v[0])!==String(b.id||'')))fail_('이미 등록된 작업자입니다.');
+  if(b.id){const row=all.find(r=>String(r.v[0])===String(b.id));if(!row)fail_('작업자를 찾을 수 없습니다.');const v=[row.v[0],visitorId||row.v[1],name,phone,b.grade,wage,status,row.v[7],memo];update_('작업자',row.row,v);return worker_(v);}
+  const v=[uuid_(),visitorId,name,phone,b.grade,wage,status,time_(),memo];add_('작업자',v);
+  if(visitorId){const app=rows_('작업자신청').filter(r=>String(r.v[1])===visitorId).at(-1);if(app){app.v[5]='채용';update_('작업자신청',app.row,app.v);}}
+  return worker_(v);
+}
+
+/** 출근·퇴근 시각(ISO)으로 하루 근로시간 계산. 6시간 이상이면 휴게 1시간 차감, 0.5시간 단위. */
+function workHours_(inTime,outTime){const span=(Date.parse(outTime)-Date.parse(inTime))/3600000;if(!(span>0))return 0;const h=span>=6?span-RULES.breakHours:span;return Math.max(0,Math.round(h*2)/2);}
+/** 일용근로소득 하루 소득세(원 미만 버림): (일급-15만)×6%×(1-55%) */
+function dayIncomeTax_(wage){return Math.floor(Math.max(0,wage-RULES.dailyExempt)*RULES.rate*(1-RULES.taxCredit));}
+/** 월 1회 지급 기준 정산. 10원 미만 절사, 소득세 1,000원 미만은 소액부징수. */
+function settle_(wage,dayCount){
+  const gross=wage*dayCount,raw=dayIncomeTax_(wage)*dayCount;
+  let incomeTax=Math.floor(raw/10)*10;if(incomeTax<RULES.smallTaxLimit)incomeTax=0;
+  const localTax=Math.floor(incomeTax*RULES.localRate/10)*10,employment=Math.floor(gross*RULES.employmentRate/10)*10;
+  return {gross,incomeTax,localTax,employment,net:gross-incomeTax-localTax-employment};
+}
+
+function payroll_(month){
+  const workers=rows_('작업자').map(r=>worker_(r.v)),byVisitor=new Map(workers.filter(w=>w.visitorId).map(w=>[w.visitorId,w]));
+  const people=new Map();
+  for(const r of rows_('근태기록')){
+    if(storedDay_(r.v[3]).slice(0,7)!==month||status_(r.v[13])!=='approved')continue;
+    const id=String(r.v[1]),e=event_(r.v);if(!people.has(id))people.set(id,{name:e.name,days:new Map()});
+    const p=people.get(id),d=p.days.get(e.day)||{};d[e.kind]=e.time;p.days.set(e.day,d);
+  }
+  const out=[];
+  for(const [visitorId,p] of people){
+    const days=[...p.days].filter(([,d])=>d.in&&d.out).map(([day,d])=>({day,hours:workHours_(d.in,d.out)})).sort((x,y)=>x.day.localeCompare(y.day));
+    if(!days.length)continue;
+    const w=byVisitor.get(visitorId),dayCount=days.length,hours=days.reduce((s,d)=>s+d.hours,0);
+    const alert=dayCount>=RULES.enrollDays||hours>=RULES.enrollHours?'enroll':dayCount>=RULES.warnDays?'warn':null;
+    const base={visitorId,name:w?w.name:p.name,registered:!!w,workerId:w?w.id:'',phone:w?w.phone:'',grade:w?w.grade:'',wage:w?w.wage:null,days,dayCount,hours,alert};
+    out.push(w?{...base,...settle_(w.wage,dayCount)}:{...base,gross:null,incomeTax:null,localTax:null,employment:null,net:null});
+  }
+  out.sort((x,y)=>x.name.localeCompare(y.name,'ko'));
+  const sum=k=>out.reduce((s,p)=>s+(p[k]||0),0);
+  return {month,rules:RULES,people:out,totals:{people:out.length,days:sum('dayCount'),gross:sum('gross'),incomeTax:sum('incomeTax'),localTax:sum('localTax'),employment:sum('employment'),net:sum('net')}};
+}

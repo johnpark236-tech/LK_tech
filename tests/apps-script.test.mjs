@@ -15,4 +15,17 @@ assert.throws(()=>call('attendance/record',{...point,kind:'out'}));assert.throws
 const entry=call('attendance/record',{...point,kind:'in'});assert.equal(entry.status,'pending');assert.throws(()=>call('attendance/record',{...point,kind:'in'}));const out=call('attendance/record',{...point,kind:'out'});const month=entry.day.slice(0,7);assert.equal(call('attendance?month='+month,{},'GET',tokenB).events.length,0);
 const personId=data.get('근태기록')[1][1];assert.equal(call('attendance/review',{id:personId,eventId:entry.eventId,month,status:'approved'},'POST',tokenB).status,'approved');assert.equal(call('attendance/review',{id:personId,eventId:out.eventId,month,status:'approved'},'POST',tokenB).status,'approved');
 assert.equal(call('attendance?month='+month,{},'GET').events.filter(e=>e.status==='approved').length,2);assert.throws(()=>call('attendance/admin?month='+month,{},'GET'));
-console.log('PASS: Sheets writes, required contact and consent, private chat, admin approval, location radius, duplicate clocks and monthly approval');
+// 인력 관리: 작업자 등록(운영자만), 공정별 일급, 월간 정산, 월 8일 알림
+const roster=call('workers',{},'GET',tokenB);assert.equal(roster.applicants.length,1);assert.equal(roster.applicants[0].visitorId,personId);
+assert.throws(()=>call('workers',{visitorId:personId,name:'홍길동',grade:'중급',wage:160000},'POST',tokenB),/운영자/);
+assert.throws(()=>call('workers',{visitorId:personId,name:'홍길동',grade:'반장',wage:160000},'POST',tokenA,true),/등급/);
+const w=call('workers',{visitorId:personId,name:'홍길동',phone:'010-1234-5678',grade:'중급',wage:160000},'POST',tokenA,true);assert.equal(w.wage,160000);
+assert.equal(data.get('작업자신청')[1][5],'채용');assert.equal(call('workers',{},'GET',tokenB).applicants.length,0);
+assert.throws(()=>call('workers',{visitorId:personId,name:'중복',grade:'초급',wage:140000},'POST',tokenA,true),/이미 등록/);
+const today=entry.day;let added=0;for(let d=1;d<=28&&added<7;d++){const day=month+'-'+String(d).padStart(2,'0');if(day===today)continue;added++;
+ for(const [kind,hm] of [['in','08:30'],['out','17:30']])data.get('근태기록').push(['x'+d+kind,personId,'홍길동',day,kind,new Date(day+'T'+hm+':00+09:00').toISOString(),s.id,s.name,'주소',s.lat,s.lng,10,0,'approved','','','',s.lat,s.lng,100]);}
+const pay=call('payroll?month='+month,{},'GET',tokenB);const p=pay.people[0];
+assert.equal(p.dayCount,8);assert.equal(p.alert,'enroll');assert.equal(p.gross,1280000);assert.equal(p.incomeTax,2160);assert.equal(p.localTax,210);assert.equal(p.employment,11520);assert.equal(p.net,1266110);assert.equal(p.days.find(d=>d.day!==today).hours,8);
+assert.equal(ctx.settle_(150000,20).incomeTax,0);assert.equal(ctx.settle_(160000,3).incomeTax,0);assert.equal(ctx.settle_(170000,5).incomeTax,2700);
+assert.throws(()=>call('payroll?month='+month,{},'GET',tokenA));
+console.log('PASS: Sheets writes, required contact and consent, private chat, admin approval, location radius, duplicate clocks and monthly approval, worker roster, payroll tax and 8-day alert');
