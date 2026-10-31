@@ -22,7 +22,7 @@ const personId=data.get('근태기록')[1][1];assert.equal(call('attendance/revi
 assert.equal(call('attendance?month='+month,{},'GET').events.filter(e=>e.status==='approved').length,2);assert.throws(()=>call('attendance/admin?month='+month,{},'GET'));
 // 인력 관리: 작업자 등록(운영자만), 공정별 일급, 월간 정산, 월 8일 알림
 const roster=call('workers',{},'GET',tokenB,STF);assert.equal(roster.applicants.length,1);assert.equal(roster.applicants[0].visitorId,personId);
-assert.throws(()=>call('workers',{visitorId:personId,name:'홍길동',grade:'숙련',wage:160000},'POST',tokenB,STF),/운영자/);
+assert.throws(()=>call('workers',{visitorId:personId,name:'홍길동',grade:'숙련',wage:160000},'POST',tokenB),/관리자/);
 assert.throws(()=>call('workers',{visitorId:personId,name:'홍길동',grade:'반장',wage:160000},'POST',tokenA,OWN),/등급/);
 const w=call('workers',{visitorId:personId,name:'홍길동',phone:'010-1234-5678',grade:'숙련',wage:160000},'POST',tokenA,OWN);assert.equal(w.wage,160000);
 assert.equal(data.get('작업자신청')[1][5],'채용');assert.equal(call('workers',{},'GET',tokenB,STF).applicants.length,0);
@@ -77,3 +77,10 @@ assert.throws(()=>call('templates',{id:t1.id,name:'X',ceo:'Y'},'POST',tokenB,STF
 assert.equal(call('templates',{id:t1.id,name:'LK 테크',ceo:'박상열',site:'평택 현장'},'POST',tokenA,OWN).site,'평택 현장');
 assert.equal(call('templates',{},'GET',tokenA,OWN).length,1);call('templates',{id:t1.id,delete:true},'POST',tokenA,OWN);assert.equal(call('templates',{},'GET',tokenA,OWN).length,0);
 console.log('PASS: per-admin contract templates');
+// 승인된 관리자도 채용·수정 가능, 시트에 채용/수정한 관리자 기록
+{const hd=data.get('작업자')[0];assert.equal(hd[9],'채용관리자');
+const ap=['h1','guest:'+'e'.repeat(64),'2026-11-01T01:00:00Z','관리자채용테스트','01077778888','접수',''];data.get('작업자신청').push(ap);
+const hw=call('workers',{visitorId:ap[1],name:ap[3],phone:ap[4],grade:'입문',wage:140000},'POST',tokenB,STF);assert.match(hw.hiredBy,/staff@example\.com/);
+const row=data.get('작업자').find(r=>r[0]===hw.id);assert.match(row[9],/staff@example\.com/);assert.match(data.get('작업자신청').find(r=>r[0]==='h1')[6],/채용: .*staff@example\.com/);
+const ed=call('workers',{id:hw.id,name:ap[3],grade:'숙련',wage:155000},'POST',tokenA,OWN);assert.match(ed.hiredBy,/staff@example\.com/);assert.match(ed.updatedBy,/owner@example\.com/);assert.equal(ed.wage,155000);
+console.log('PASS: admins can hire, hiring admin recorded');}

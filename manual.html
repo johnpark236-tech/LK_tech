@@ -74,7 +74,7 @@ footer{text-align:center;color:var(--muted);font-size:13px;padding:10px 16px 30p
 <tr><td>인력 관리: 명부·정산 보기·CSV</td><td>✅</td><td>✅</td><td>—</td></tr>
 <tr><td>근로계약서 작성·서명, 양식(사업주 정보)</td><td>✅</td><td>✅ (본인 양식)</td><td>—</td></tr>
 <tr><td>출퇴근 승인·반려</td><td>✅</td><td>✅ (본인 기록 제외)</td><td>—</td></tr>
-<tr><td>채용 등록 · 일급 수정</td><td>✅</td><td>보기만</td><td>—</td></tr>
+<tr><td>채용 등록 · 일급 수정 (누가 했는지 시트에 기록)</td><td>✅</td><td>✅</td><td>—</td></tr>
 <tr><td>근무지 등록 · 관리자 승인/추가/해제</td><td>✅</td><td>—</td><td>—</td></tr>
 </table></div>
 <p class="note"><b>운영자</b> = 서버(Apps Script)를 배포한 구글 계정. <b>관리자</b> = 운영자가 승인한 구글 계정. 지원자는 로그인 없이 신청합니다.</p>
@@ -122,7 +122,7 @@ footer{text-align:center;color:var(--muted);font-size:13px;padding:10px 16px 30p
 <li><span class="btn">채용 등록</span> → 확인창에서 금액 확인 → 확인</li>
 </ol>
 <p class="note">일급은 그날 맡은 공정과 관계없이 <b>본인 숙련 단계 기준</b>입니다. 단계가 오르면 작업자 명부의 <span class="btn sub">수정</span>에서 단계·일급을 바꾸고 <a href="#contract">변경 계약서</a>를 다시 서명합니다.</p>
-<p class="warn">채용 등록과 일급 수정은 <b>운영자만</b> 할 수 있습니다.</p>
+<p class="note">채용 등록과 일급 수정은 <b>승인된 관리자 누구나</b> 할 수 있습니다. 누가 채용했는지·마지막으로 고쳤는지는 작업자 명부의 <b>채용</b> 칸과 구글 시트 <b>작업자</b> 탭(채용관리자·최종수정관리자·최종수정일)에 남습니다.</p>
 <a class="top" href="#">↑ 맨 위로</a></section>
 
 <section id="template"><h2><span class="no">6</span>근로계약서 양식(사업주 정보) 미리 작성</h2>
