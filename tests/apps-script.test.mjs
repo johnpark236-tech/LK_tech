@@ -1,6 +1,6 @@
 import fs from 'node:fs';import vm from 'node:vm';import crypto from 'node:crypto';import assert from 'node:assert/strict';
 const schema=JSON.parse(fs.readFileSync(new URL('../apps-script/schema.json',import.meta.url),'utf8'));const data=new Map(Object.entries(schema).map(([n,h])=>[n,[h]]));
-const sheets=new Map([...data].map(([name,rows])=>[name,{getLastRow:()=>rows.length,getLastColumn:()=>rows[0].length,getRange:(r,c,h=1,w=1)=>({getValues:()=>rows.slice(r-1,r-1+h).map(row=>row.slice(c-1,c-1+w)),setValues:v=>{v.forEach((row,i)=>{rows[r-1+i]||=[];row.forEach((x,j)=>rows[r-1+i][c-1+j]=x)})}}),deleteRow:r=>rows.splice(r-1,1)}]));
+const sheets=new Map([...data].map(([name,rows])=>[name,{getLastRow:()=>rows.length,getLastColumn:()=>rows[0].length,getRange:(r,c,h=1,w=1)=>({getValues:()=>rows.slice(r-1,r-1+h).map(row=>row.slice(c-1,c-1+w)),setValues:v=>{v.forEach((row,i)=>{rows[r-1+i]||=[];row.forEach((x,j)=>rows[r-1+i][c-1+j]=typeof x==='string'&&x.startsWith("'")?x.slice(1):x)})}}),deleteRow:r=>rows.splice(r-1,1)}]));
 const CID='test-client.apps.googleusercontent.com',props=new Map([['GOOGLE_CLIENT_ID',CID]]);const cache=new Map();let fetches=0;
 const OWN='h.owner.s',STF='h.staff.s',BAD='h.wrongaud.s',OLD='h.expired.s',later=Math.floor(Date.now()/1000)+3000;
 const tokens={[OWN]:{aud:CID,iss:'https://accounts.google.com',email:'Owner@Example.com',email_verified:'true',exp:String(later)},[STF]:{aud:CID,iss:'accounts.google.com',email:'staff@example.com',email_verified:'true',exp:String(later)},[BAD]:{aud:'other',iss:'accounts.google.com',email:'x@example.com',email_verified:'true',exp:String(later)},[OLD]:{aud:CID,iss:'accounts.google.com',email:'staff@example.com',email_verified:'true',exp:'1000'}};
@@ -42,3 +42,7 @@ assert.equal(call('staff',{},'GET',tokenA,OWN).find(r=>r.id==='google:new@exampl
 call('staff',{id:'google:new@example.com',status:'disabled'},'POST',tokenA,OWN);call('staff/add',{email:'new@example.com'},'POST',tokenA,OWN);
 assert.equal(call('staff',{},'GET',tokenA,OWN).filter(r=>r.id==='google:new@example.com').length,1);
 console.log('PASS: owner adds admin by email');
+// 전화번호 앞자리 0 보존
+assert.equal(ctx.cellText_('01071423011'),"'01071423011");assert.equal(ctx.phone_(1071423011),'01071423011');assert.equal(ctx.phone_('01012345678'),'01012345678');assert.equal(ctx.phone_(''),'');
+data.get('관리자신청').push(['google:old@example.com','2026-10-31','기존',1071423011,'pending','','']);assert.equal(call('staff',{},'GET',tokenA,OWN).find(r=>r.id==='google:old@example.com').phone,'01071423011');
+console.log('PASS: phone leading zero');
