@@ -10,7 +10,9 @@
   const won = n => Number(n || 0).toLocaleString('ko-KR');
   const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
   const korDate = d => { const [y, m, dd] = String(d).split('-'); return y ? `${y}년 ${Number(m)}월 ${Number(dd)}일` : ''; };
-  let libsLoaded = null, draft = null, pads = {}, result = null;
+  let libsLoaded = null, draft = null, pads = {}, result = null, templates = [];
+  const fmtBizNo = v => { const d = String(v || '').replace(/[^0-9]/g, '').slice(0, 10); return d.length > 5 ? d.slice(0, 3) + '-' + d.slice(3, 5) + '-' + d.slice(5) : d.length > 3 ? d.slice(0, 3) + '-' + d.slice(3) : d; };
+  document.addEventListener('input', e => { if (e.target.matches && e.target.matches('input[data-bizno]')) { const f = fmtBizNo(e.target.value); if (f !== e.target.value) e.target.value = f; } });
 
   function loadLibs() {
     if (libsLoaded) return libsLoaded;
@@ -41,7 +43,7 @@
 
   /* ---------- 계약서 본문(HTML) — 고용노동부 표준근로계약서 항목 기준 ---------- */
   function contractHtml(d, sig = {}) {
-    const B = biz(), g = roster?.grades?.[d.grade];
+    const B = d.employer || {}, g = roster?.grades?.[d.grade];
     const period = d.start === d.end ? `${korDate(d.start)} (1일)` : `${korDate(d.start)}부터 ${korDate(d.end)}까지 (근로일 단위로 근로를 제공함)`;
     const sigImg = (src, label) => src ? `<img src="${src}" alt="${label}" style="height:46px;max-width:160px;vertical-align:middle">` : '<span style="color:#999">(서명)</span>';
     const row = (k, v) => `<tr><th>${k}</th><td>${v}</td></tr>`;
@@ -89,33 +91,85 @@ ${row('서명', sigImg(sig.worker, '근로자 서명'))}</table>
     const v = id => $('#ct_' + id).value.trim();
     const d = { ...draft, name: v('name'), phone: v('phone'), birth: v('birth'), address: v('address'), grade: v('grade'), wage: Number(v('wage')),
       start: v('start'), end: v('end') || v('start'), site: v('site'), timeStart: v('timeStart'), timeEnd: v('timeEnd'), breakTime: v('breakTime'),
-      days: v('days'), weeklyHoliday: v('weeklyHoliday'), weeklyPay: v('weeklyPay'), payday: v('payday'), employerSigner: v('employerSigner'), signDate: today() };
-    const missing = [['name', '근로자 이름'], ['start', '계약 시작일'], ['site', '근무장소'], ['employerSigner', '사업주 서명자']].filter(([k]) => !d[k]).map(([, l]) => l);
+      days: v('days'), weeklyHoliday: v('weeklyHoliday'), weeklyPay: v('weeklyPay'), payday: v('payday'), employerSigner: v('employerSigner') || v('ceo'), signDate: today(),
+      employer: { name: v('bizName'), ceo: v('ceo'), bizNo: v('bizNo'), address: v('bizAddress'), phone: fmtPhone(v('bizPhone')) } };
+    const missing = [['bizName', '사업체명'], ['ceo', '대표자'], ['name', '근로자 이름'], ['start', '계약 시작일'], ['site', '근무장소']].map(([k, l]) => [k === 'bizName' ? d.employer.name : k === 'ceo' ? d.employer.ceo : d[k], l]).filter(([val]) => !val).map(([, l]) => l);
     if (missing.length) throw Error(missing.join(', ') + '을(를) 입력하세요.');
     if (!Number.isInteger(d.wage) || d.wage < 10000 || d.wage > 1000000) throw Error('일급을 1만~100만원 사이로 입력하세요.');
     if (d.end < d.start) throw Error('계약 종료일이 시작일보다 빠릅니다.');
     return d;
   }
 
-  window.openContract = function (worker) {
+  function fillTemplateSelect(selectedId) {
+    const sel = $('#ct_template'); sel.replaceChildren();
+    for (const t of templates) { const o = document.createElement('option'); o.value = t.id; o.textContent = t.label; sel.append(o); }
+    const o = document.createElement('option'); o.value = ''; o.textContent = '직접 입력'; sel.append(o);
+    sel.value = selectedId && templates.some(t => t.id === selectedId) ? selectedId : (templates[0]?.id || '');
+  }
+  function applyTemplate(id) {
+    const t = templates.find(x => x.id === id), set = (k, val) => { $('#ct_' + k).value = val ?? ''; };
+    if (!t) { $('#ct_tplMsg').textContent = '사업주 정보를 직접 입력하세요. 아래 버튼으로 양식에 저장해 두면 다음부터 선택만 하면 됩니다.'; return; }
+    set('bizName', t.name); set('ceo', t.ceo); set('bizNo', t.bizNo); set('bizPhone', fmtPhone(t.phone)); set('bizAddress', t.address);
+    if (t.site) set('site', t.site); set('employerSigner', t.ceo); $('#ct_tplMsg').textContent = '';
+  }
+  async function saveTemplateFromForm() {
+    const v = id => $('#ct_' + id).value.trim(), id = $('#ct_template').value;
+    if (id && !confirm('선택한 양식을 지금 입력한 내용으로 바꿀까요? (취소하면 새 양식으로 저장)')) return saveTemplate({ id: '' });
+    return saveTemplate({ id });
+    async function saveTemplate(x) {
+      try {
+        const t = await api('templates', 'POST', { id: x.id || undefined, name: v('bizName'), ceo: v('ceo'), bizNo: v('bizNo'), phone: v('bizPhone'), address: v('bizAddress'), site: v('site') });
+        templates = await api('templates'); fillTemplateSelect(t.id); $('#ct_tplMsg').textContent = '‘' + t.label + '’ 양식으로 저장했습니다.'; renderTemplateList();
+      } catch (e) { $('#ct_tplMsg').textContent = e.message; }
+    }
+  }
+
+  window.openContract = async function (worker) {
     if (!me?.admin) { $('#status').textContent = '승인된 관리자만 계약서를 작성할 수 있습니다.'; return; }
-    const B = biz();
     draft = { id: crypto.randomUUID(), workerId: worker?.id || '' };
     result = null;
     const set = (id, val) => { $('#ct_' + id).value = val ?? ''; };
     $('#ct_grade').replaceChildren(...Object.entries(roster.grades || {}).map(([k, g]) => { const o = document.createElement('option'); o.value = k; o.textContent = g.label; return o; }));
     set('name', worker?.name); set('phone', fmtPhone(worker?.phone || '')); set('birth', ''); set('address', '');
     set('grade', worker?.grade || '입문'); set('wage', worker?.wage || roster.grades?.[worker?.grade || '입문']?.wage || '');
-    set('start', today()); set('end', ''); set('site', B.site || '');
+    set('start', today()); set('end', ''); set('site', '');
     set('timeStart', '08:30'); set('timeEnd', '17:30'); set('breakTime', '12:00~13:00 (1시간)');
     set('days', '월~금'); set('weeklyHoliday', '일요일'); set('weeklyPay', '요건 충족 시 별도 지급'); set('payday', '매월 10일');
-    set('employerSigner', B.ceo || '');
-    $('#ct_warn').textContent = (!B.ceo || !B.bizNo || !B.address) ? '⚠ config.js에 대표자·사업자번호·주소가 비어 있습니다. 계약서 사업주란이 빈칸으로 나옵니다.' : '';
-    $('#ct_err').textContent = '';
+    ['bizName', 'ceo', 'bizNo', 'bizPhone', 'bizAddress', 'employerSigner'].forEach(k => set(k, ''));
+    $('#ct_err').textContent = ''; $('#ct_tplMsg').textContent = '';
     showPanel('contractPanel'); step(1);
+    try { templates = await api('templates'); } catch (e) { templates = []; $('#ct_tplMsg').textContent = e.message; }
+    fillTemplateSelect(); applyTemplate($('#ct_template').value);
   };
 
+  /* ---------- 관리자: 근로계약서 양식(사업주 정보) 미리 작성 ---------- */
+  function renderTemplateList() {
+    const box = $('#tplList'); if (!box) return;
+    box.replaceChildren();
+    if (!templates.length) { box.textContent = '저장된 양식이 없습니다. 아래에 사업주 정보를 입력해 저장하세요.'; return; }
+    const tb = document.createElement('table'); tb.innerHTML = '<tr><th>양식</th><th>대표자</th><th>사업자번호</th><th>기본 근무장소</th><th></th></tr>';
+    for (const t of templates) {
+      const tr = document.createElement('tr'); tr.innerHTML = `<td>${esc(t.label)}</td><td>${esc(t.ceo)}</td><td>${esc(t.bizNo)}</td><td>${esc(t.site)}</td>`;
+      const td = document.createElement('td'), e1 = document.createElement('button'), e2 = document.createElement('button');
+      e1.type = e2.type = 'button'; e1.className = e2.className = 'secondary'; e1.textContent = '수정'; e2.textContent = '삭제'; e2.style.marginLeft = '6px';
+      e1.onclick = () => { const f = k => $('#tf_' + k); f('id').value = t.id; f('label').value = t.label; f('name').value = t.name; f('ceo').value = t.ceo; f('bizNo').value = t.bizNo; f('phone').value = fmtPhone(t.phone); f('address').value = t.address; f('site').value = t.site; $('#tplMsg').textContent = '‘' + t.label + '’ 수정 중'; $('#tplForm').scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+      e2.onclick = async () => { if (!confirm('‘' + t.label + '’ 양식을 삭제할까요? (이미 작성된 계약서에는 영향 없음)')) return; try { await api('templates', 'POST', { id: t.id, delete: true }); await loadTemplateManager(); } catch (e) { $('#tplMsg').textContent = e.message; } };
+      td.append(e1, e2); tr.append(td); tb.append(tr);
+    }
+    box.append(tb);
+  }
+  window.loadTemplateManager = async function () { if (!$('#tplList')) return; templates = await api('templates'); renderTemplateList(); };
+
   function bind() {
+    $('#ct_template').onchange = e => applyTemplate(e.target.value);
+    $('#ct_saveTemplate').onclick = saveTemplateFromForm;
+    $('#tplForm').onsubmit = async e => {
+      e.preventDefault(); const f = k => $('#tf_' + k).value.trim();
+      try { const t = await api('templates', 'POST', { id: f('id') || undefined, label: f('label'), name: f('name'), ceo: f('ceo'), bizNo: f('bizNo'), phone: f('phone'), address: f('address'), site: f('site') });
+        $('#tplMsg').textContent = '‘' + t.label + '’ 양식을 저장했습니다. 계약서 작성 시 선택하세요.'; e.target.reset(); $('#tf_id').value = ''; await loadTemplateManager(); }
+      catch (err) { $('#tplMsg').textContent = err.message; }
+    };
+    $('#tf_reset').onclick = () => { $('#tplForm').reset(); $('#tf_id').value = ''; $('#tplMsg').textContent = ''; };
     $('#ct_toPreview').onclick = () => {
       try { draft = readForm(); $('#ct_err').textContent = ''; } catch (e) { $('#ct_err').textContent = e.message; return; }
       $('#ct_preview').innerHTML = contractHtml(draft); step(2);
@@ -165,7 +219,7 @@ ${row('서명', sigImg(sig.worker, '근로자 서명'))}</table>
     } catch (e) { $('#ct_err3').textContent = e.message; } finally { btn.disabled = false; }
   }
 
-  const shareText = () => `${draft.name}님, ${biz().name || ''} 근로계약서입니다.\n아래 링크에서 언제든 다시 받을 수 있습니다.\n${result.link}`;
+  const shareText = () => `${draft.name}님, ${draft.employer?.name || ''} 근로계약서입니다.\n아래 링크에서 언제든 다시 받을 수 있습니다.\n${result.link}`;
   async function share() {
     try { await navigator.share({ files: [new File([result.blob], result.fileName, { type: 'application/pdf' })], title: '근로계약서', text: shareText() }); }
     catch (e) { if (e.name !== 'AbortError') $('#ct_doneMsg').textContent = '공유하지 못했습니다. 다운로드 후 직접 보내 주세요.'; }

@@ -68,6 +68,7 @@ function dispatch_(p){
  if(path==='attendance/record'&&method==='POST'){if(b.consent!==true)fail_('위치·시간 정보 저장에 동의하세요.');if(!['in','out'].includes(b.kind))fail_('출퇴근 구분을 확인하세요.');if(!Number.isFinite(b.lat)||!Number.isFinite(b.lng)||Math.abs(b.lat)>90||Math.abs(b.lng)>180||!Number.isFinite(b.accuracy)||b.accuracy<=0||b.accuracy>100)fail_('위치 오차가 100m 이하일 때 현장에서 다시 시도하세요.');const sr=rows_('근무지').find(r=>r.v[0]===b.siteId);if(!sr)fail_('등록된 근무지를 선택하세요.');const s=site_(sr.v),distance=distance_(s,{lat:b.lat,lng:b.lng});if(distance>s.radius)fail_('근무지 허용 반경 밖입니다.');const day=day_(new Date()),today=rows_('근태기록').filter(r=>r.v[1]===a.id&&storedDay_(r.v[3])===day);if(today.some(r=>r.v[4]===b.kind&&status_(r.v[13])!=='rejected'))fail_('오늘 기록이 이미 있습니다.');const arrival=today.find(r=>r.v[4]==='in'&&status_(r.v[13])!=='rejected');if(b.kind==='out'&&(!arrival||arrival.v[6]!==s.id))fail_('오늘 출근한 근무지에서 퇴근을 기록하세요.');if(today.length>=6)fail_('일일 기록 한도입니다.');const app=rows_('작업자신청').filter(r=>r.v[1]===a.id).at(-1),name=app?.v[3]||a.name||String(b.name||'').trim();if(!name||name.length>40)fail_('이름을 입력하세요.');const v=[uuid_(),a.id,name,day,b.kind,now,s.id,s.name,s.address,b.lat,b.lng,b.accuracy,Math.round(distance),'pending','','','',s.lat,s.lng,s.radius];add_('근태기록',v);return event_(v);}
  if(path==='attendance/review'&&method==='POST'){if(!a.admin)fail_('관리자만 확인할 수 있습니다.');if(b.id===a.id)fail_('본인의 기록은 다른 관리자가 확인해야 합니다.');if(!['approved','rejected'].includes(b.status))fail_('승인·반려를 선택하세요.');const r=rows_('근태기록').find(r=>r.v[0]===b.eventId&&r.v[1]===b.id&&storedDay_(r.v[3]).slice(0,7)===b.month);if(!r||status_(r.v[13])!=='pending')fail_('기록이 없거나 이미 확인했습니다.');if(b.status==='rejected'&&!String(b.reason||'').trim())fail_('반려 사유를 입력하세요.');r.v[13]=b.status;r.v[14]=now;r.v[15]=a.name;r.v[16]=String(b.reason||'').slice(0,200);update_('근태기록',r.row,r.v);return event_(r.v);}
  if(path==='workers')return workers_(a,method,b);
+ if(path==='templates')return templates_(a,method,b);
  if(path.startsWith('contract'))return contracts_(a,path,method,b,parts);
  if(path==='payroll'){if(method!=='GET'||!a.admin)fail_('승인된 관리자만 볼 수 있습니다.');if(!/^20[0-9]{2}-(0[1-9]|1[0-2])$/.test(month))fail_('조회 월을 확인하세요.');return payroll_(month);}
  fail_('지원하지 않는 요청입니다.');
@@ -87,6 +88,7 @@ const SCHEMA = {
   '알림대기':['알림ID','접수시각','구분','이름','전화번호','발송상태','발송시각'],
   '작업자':['작업자ID','방문자ID','이름','전화번호','등급','일급','상태','등록일','메모'],
   '근로계약서':['계약ID','작업자ID','근로자','전화번호','계약시작','계약종료','숙련단계','일급','파일ID','파일명','SHA256','사업주서명자','대면확인관리자','완료시각','다운로드코드해시','상태'],
+  '계약서양식':['양식ID','관리자ID','양식이름','사업체명','대표자','사업자등록번호','사업장주소','대표전화','기본근무장소','수정시각'],
   '설정':['항목','값']
 };
 /** 없는 시트만 만들고 기존 시트는 건드리지 않습니다. */
@@ -197,3 +199,21 @@ function contracts_(a,path,method,b,query){
   fail_('지원하지 않는 요청입니다.');
 }
 function r_status_(row){return row.v[15]||'완료';}
+
+/* ===== 근로계약서 양식(사업주 정보): 관리자별로 미리 저장, 계약서 작성 시 선택 ===== */
+function template_(v){return {id:String(v[0]),label:String(v[2]),name:String(v[3]),ceo:String(v[4]),bizNo:String(v[5]),address:String(v[6]),phone:phone_(v[7]),site:String(v[8]),updated:stamp_(v[9])};}
+function bizNo_(x){const d=String(x||'').replace(/[^0-9]/g,'');if(!d)return '';if(d.length!==10)fail_('사업자등록번호는 숫자 10자리입니다.');return d.slice(0,3)+'-'+d.slice(3,5)+'-'+d.slice(5);}
+function templates_(a,method,b){
+  if(!a.admin)fail_('승인된 관리자만 이용할 수 있습니다.');
+  const mine=()=>rows_('계약서양식').filter(r=>String(r.v[1])===a.id);
+  if(method==='GET')return mine().map(r=>template_(r.v));
+  if(method!=='POST')fail_('지원하지 않는 요청입니다.');
+  if(b.delete){const row=mine().find(r=>String(r.v[0])===String(b.id));if(!row)fail_('양식을 찾을 수 없습니다.');tab_('계약서양식').deleteRow(row.row);return {ok:true};}
+  const t=k=>String(b[k]||'').trim(),name=t('name'),ceo=t('ceo'),phone=t('phone').replace(/[^0-9]/g,'');
+  if(!name||name.length>60)fail_('사업체명을 입력하세요.');if(!ceo||ceo.length>40)fail_('대표자 이름을 입력하세요.');
+  if(phone&&!/^0[0-9]{8,10}$/.test(phone))fail_('대표 전화번호를 확인하세요.');if(t('address').length>150||t('site').length>100||t('label').length>60)fail_('입력이 너무 깁니다.');
+  const v=[b.id||uuid_(),a.id,t('label')||name+(t('site')?' · '+t('site'):''),name,ceo,bizNo_(b.bizNo),t('address'),phone,t('site'),time_()];
+  if(b.id){const row=mine().find(r=>String(r.v[0])===String(b.id));if(!row)fail_('양식을 찾을 수 없습니다.');update_('계약서양식',row.row,v);return template_(v);}
+  if(mine().length>=20)fail_('양식은 20개까지 저장할 수 있습니다.');
+  add_('계약서양식',v);return template_(v);
+}

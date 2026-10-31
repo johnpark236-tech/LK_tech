@@ -66,3 +66,14 @@ assert.equal(call('contracts/file?id='+cid,{},'GET',tokenA,OWN).base64,b64);
 const got=call('contract/public',{code:saved.code},'POST',tokenB);assert.equal(got.base64,b64);assert.equal(got.name,'홍길동');
 assert.throws(()=>call('contract/public',{code:'AAAAAAAAAAAA'},'POST',tokenB),/찾을 수 없습니다/);
 console.log('PASS: e-contract save, integrity, worker download code');}
+// 근로계약서 양식(사업주 정보): 관리자별 저장·수정·삭제, 다른 관리자 양식은 보이지 않음
+assert.throws(()=>call('templates',{},'GET',tokenA),/관리자/);
+assert.throws(()=>call('templates',{name:'LK 테크'},'POST',tokenA,OWN),/대표자/);
+assert.throws(()=>call('templates',{name:'LK 테크',ceo:'박상열',bizNo:'123'},'POST',tokenA,OWN),/10자리/);
+const t1=call('templates',{name:'LK 테크',ceo:'박상열',bizNo:'1234567890',address:'충남 천안시',phone:'010-1111-2222',site:'직산 현장'},'POST',tokenA,OWN);
+assert.equal(t1.bizNo,'123-45-67890');assert.equal(t1.label,'LK 테크 · 직산 현장');assert.equal(t1.phone,'01011112222');
+assert.equal(call('templates',{},'GET',tokenB,STF).length,0,'staff cannot see owner template');
+assert.throws(()=>call('templates',{id:t1.id,name:'X',ceo:'Y'},'POST',tokenB,STF),/찾을 수 없습니다/);
+assert.equal(call('templates',{id:t1.id,name:'LK 테크',ceo:'박상열',site:'평택 현장'},'POST',tokenA,OWN).site,'평택 현장');
+assert.equal(call('templates',{},'GET',tokenA,OWN).length,1);call('templates',{id:t1.id,delete:true},'POST',tokenA,OWN);assert.equal(call('templates',{},'GET',tokenA,OWN).length,0);
+console.log('PASS: per-admin contract templates');
