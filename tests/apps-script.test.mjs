@@ -17,11 +17,11 @@ const personId=data.get('근태기록')[1][1];assert.equal(call('attendance/revi
 assert.equal(call('attendance?month='+month,{},'GET').events.filter(e=>e.status==='approved').length,2);assert.throws(()=>call('attendance/admin?month='+month,{},'GET'));
 // 인력 관리: 작업자 등록(운영자만), 공정별 일급, 월간 정산, 월 8일 알림
 const roster=call('workers',{},'GET',tokenB);assert.equal(roster.applicants.length,1);assert.equal(roster.applicants[0].visitorId,personId);
-assert.throws(()=>call('workers',{visitorId:personId,name:'홍길동',grade:'중급',wage:160000},'POST',tokenB),/운영자/);
+assert.throws(()=>call('workers',{visitorId:personId,name:'홍길동',grade:'숙련',wage:160000},'POST',tokenB),/운영자/);
 assert.throws(()=>call('workers',{visitorId:personId,name:'홍길동',grade:'반장',wage:160000},'POST',tokenA,true),/등급/);
-const w=call('workers',{visitorId:personId,name:'홍길동',phone:'010-1234-5678',grade:'중급',wage:160000},'POST',tokenA,true);assert.equal(w.wage,160000);
+const w=call('workers',{visitorId:personId,name:'홍길동',phone:'010-1234-5678',grade:'숙련',wage:160000},'POST',tokenA,true);assert.equal(w.wage,160000);
 assert.equal(data.get('작업자신청')[1][5],'채용');assert.equal(call('workers',{},'GET',tokenB).applicants.length,0);
-assert.throws(()=>call('workers',{visitorId:personId,name:'중복',grade:'초급',wage:140000},'POST',tokenA,true),/이미 등록/);
+assert.throws(()=>call('workers',{visitorId:personId,name:'중복',grade:'입문',wage:140000},'POST',tokenA,true),/이미 등록/);
 const today=entry.day;let added=0;for(let d=1;d<=28&&added<7;d++){const day=month+'-'+String(d).padStart(2,'0');if(day===today)continue;added++;
  for(const [kind,hm] of [['in','08:30'],['out','17:30']])data.get('근태기록').push(['x'+d+kind,personId,'홍길동',day,kind,new Date(day+'T'+hm+':00+09:00').toISOString(),s.id,s.name,'주소',s.lat,s.lng,10,0,'approved','','','',s.lat,s.lng,100]);}
 const pay=call('payroll?month='+month,{},'GET',tokenB);const p=pay.people[0];
