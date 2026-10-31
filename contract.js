@@ -89,7 +89,7 @@ ${row('서명', sigImg(sig.worker, '근로자 서명'))}</table>
   }
   function readForm() {
     const v = id => $('#ct_' + id).value.trim();
-    const d = { ...draft, name: v('name'), phone: v('phone'), birth: v('birth'), address: v('address'), grade: v('grade'), wage: Number(v('wage')),
+    const d = { ...draft, name: v('name'), phone: v('phone'), birth: v('birth'), address: v('address'), grade: v('grade'), wage: fromMan(v('wage')),
       start: v('start'), end: v('end') || v('start'), site: v('site'), timeStart: v('timeStart'), timeEnd: v('timeEnd'), breakTime: v('breakTime'),
       days: v('days'), weeklyHoliday: v('weeklyHoliday'), weeklyPay: v('weeklyPay'), payday: v('payday'), employerSigner: v('employerSigner') || v('ceo'), signDate: today(),
       employer: { name: v('bizName'), ceo: v('ceo'), bizNo: v('bizNo'), address: v('bizAddress'), phone: fmtPhone(v('bizPhone')) } };
@@ -131,7 +131,7 @@ ${row('서명', sigImg(sig.worker, '근로자 서명'))}</table>
     const set = (id, val) => { $('#ct_' + id).value = val ?? ''; };
     $('#ct_grade').replaceChildren(...Object.entries(roster.grades || {}).map(([k, g]) => { const o = document.createElement('option'); o.value = k; o.textContent = g.label; return o; }));
     set('name', worker?.name); set('phone', fmtPhone(worker?.phone || '')); set('birth', ''); set('address', '');
-    set('grade', worker?.grade || '입문'); set('wage', worker?.wage || roster.grades?.[worker?.grade || '입문']?.wage || '');
+    set('grade', worker?.grade || '입문'); set('wage', toMan(worker?.wage || roster.grades?.[worker?.grade || '입문']?.wage));
     set('start', today()); set('end', ''); set('site', '');
     set('timeStart', '08:30'); set('timeEnd', '17:30'); set('breakTime', '12:00~13:00 (1시간)');
     set('days', '월~금'); set('weeklyHoliday', '일요일'); set('weeklyPay', '요건 충족 시 별도 지급'); set('payday', '매월 10일');
