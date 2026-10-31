@@ -104,8 +104,12 @@ function workers_(a,method,b){
   if(!a.admin)fail_('승인된 관리자만 볼 수 있습니다.');
   if(method==='GET'){
     const list=rows_('작업자').map(r=>worker_(r.v)),known=new Set(list.map(w=>w.visitorId).filter(Boolean)),seen=new Set();
-    const applicants=rows_('작업자신청').slice().reverse().filter(r=>{const id=String(r.v[1]);if(known.has(id)||seen.has(id))return false;seen.add(id);return true;}).map(r=>({visitorId:String(r.v[1]),name:String(r.v[3]),phone:phone_(r.v[4]),submitted:stamp_(r.v[2])}));
-    return {grades:GRADES,workers:list,applicants};
+    // 관리자(승인 대기·활동 중)와 운영자는 작업자 채용 목록에서 제외: 계정 또는 전화번호가 같으면 관리자로 봄
+    const digits=v=>phone_(v).replace(/[^0-9]/g,''),staff=rows_('관리자신청').filter(r=>status_(r.v[4])!=='disabled');
+    const staffIds=new Set(staff.map(r=>String(r.v[0]))),staffPhones=new Set(staff.map(r=>digits(r.v[3])).filter(Boolean));
+    let hiddenStaff=0;
+    const applicants=rows_('작업자신청').slice().reverse().filter(r=>{const id=String(r.v[1]);if(known.has(id)||seen.has(id))return false;seen.add(id);if(id==='owner'||staffIds.has(id)||staffPhones.has(digits(r.v[4]))){hiddenStaff++;return false;}return true;}).map(r=>({visitorId:String(r.v[1]),name:String(r.v[3]),phone:phone_(r.v[4]),submitted:stamp_(r.v[2])}));
+    return {grades:GRADES,workers:list,applicants,hiddenStaff};
   }
   if(method!=='POST')fail_('지원하지 않는 요청입니다.');
   if(!a.owner)fail_('작업자 등록·수정은 운영자만 할 수 있습니다.');
