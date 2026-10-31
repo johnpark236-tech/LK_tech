@@ -20,7 +20,7 @@ function install(){ownerEditor_();ensureSheets_();book_().setSpreadsheetTimeZone
 function onOpen(){SpreadsheetApp.getUi().createMenu('LK 테크').addItem('로그인 설정 확인','showLoginSetup').addToUi();}
 function showLoginSetup(){ownerEditor_();SpreadsheetApp.getUi().alert('LK 테크 로그인 설정','운영자 구글 계정: '+owners_().join(', ')+'\nGoogle Client ID: '+(clientId_()||'미설정'),SpreadsheetApp.getUi().ButtonSet.OK);}
 /** 홈페이지 Google 로그인(OAuth 클라이언트 ID). 공개 값이며 비밀키가 아님. 스크립트 속성 GOOGLE_CLIENT_ID로도 설정 가능. */
-const GOOGLE_CLIENT_ID = '';
+const GOOGLE_CLIENT_ID = '524254414923-7725ihp35uanp4pfa0i1e6pfhrbos59l.apps.googleusercontent.com';
 function clientId_(){return PropertiesService.getScriptProperties().getProperty('GOOGLE_CLIENT_ID')||GOOGLE_CLIENT_ID;}
 /** 운영자 = 웹 앱을 배포한 구글 계정 + 스크립트 속성 OWNER_EMAILS(쉼표 구분)에 적은 계정 */
 function owners_(){const list=String(PropertiesService.getScriptProperties().getProperty('OWNER_EMAILS')||'').split(',');list.push(Session.getEffectiveUser().getEmail()||'');return [...new Set(list.map(x=>x.trim().toLowerCase()).filter(Boolean))];}
