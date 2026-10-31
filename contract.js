@@ -10,6 +10,38 @@
   const won = n => Number(n || 0).toLocaleString('ko-KR');
   const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());
   const korDate = d => { const [y, m, dd] = String(d).split('-'); return y ? `${y}년 ${Number(m)}월 ${Number(dd)}일` : ''; };
+
+  /* ---------- 일급 구성 자동 계산 (근로기준법 제17조: 임금의 구성항목·계산방법 명시) ---------- */
+  const MIN_WAGE = 10320; // 2026년 최저시급
+  const hm = t => { const m = String(t || '').match(/(\d{1,2}):(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+  function dailyHours(d) {
+    const a = hm(d.timeStart), b = hm(d.timeEnd); if (a == null || b == null || b <= a) return 8;
+    let brk = 0; const bt = String(d.breakTime || ''), r = bt.match(/(\d{1,2}:\d{2})\s*[~\-]\s*(\d{1,2}:\d{2})/);
+    if (r) brk = Math.max(0, hm(r[2]) - hm(r[1])); else { const h = bt.match(/(\d+(?:\.\d+)?)\s*시간/), mi = bt.match(/(\d+)\s*분/); brk = (h ? Number(h[1]) * 60 : 0) + (mi ? Number(mi[1]) : 0); }
+    const h = (b - a - brk) / 60; return h > 0 ? Math.min(8, Math.round(h * 2) / 2) : 8; // 1일 소정근로시간은 최대 8시간
+  }
+  function workDays(d) {
+    const t = String(d.days || ''), W = '월화수목금토일', r = t.match(/([월화수목금토일])\s*[~\-]\s*([월화수목금토일])/);
+    if (r) { const n = W.indexOf(r[2]) - W.indexOf(r[1]) + 1; if (n > 0) return n; }
+    const n = new Set((t.match(/[월화수목금토일]/g) || [])).size; return n || 5;
+  }
+  window.wageBreakdown = function (d) {
+    const W = Number(d.wage) || 0, H = dailyHours(d), D = workDays(d), weekly = H * D;
+    const holiday = weekly >= 15 ? Math.min(8, weekly / 40 * 8) : 0;           // 주휴시간 (주 15시간 이상, 40시간 미만은 비례)
+    const included = /포함/.test(d.weeklyPay || '');
+    const hourlyExact = included ? (W * D) / (weekly + holiday) : W / H;
+    const hourly = Math.round(hourlyExact), base = included ? Math.round(hourlyExact * H) : W, weeklyPay = included ? W - base : Math.round(hourlyExact * holiday);
+    return { over40: weekly > 40, W, H, D, weekly, holiday, included, hourly, base, weeklyPay, ot: Math.round(hourlyExact * 1.5), night: Math.round(hourlyExact * 0.5), minOk: hourlyExact >= MIN_WAGE };
+  };
+  function wageLines(d) {
+    const k = wageBreakdown(d), n = x => won(x);
+    const comp = k.included
+      ? `- 일급의 구성: 기본일급 <b>${n(k.base)}원</b>(통상시급 ${n(k.hourly)}원 × ${k.H}시간) + 주휴수당 <b>${n(k.weeklyPay)}원</b> (1주 주휴 ${k.holiday}시간분을 소정근로일 ${k.D}일에 나누어 매 근로일 함께 지급)<br>
+ - 통상시급 계산: 일급 ${n(k.W)}원 × 주 ${k.D}일 ÷ (주 소정근로 ${k.weekly}시간 + 주휴 ${k.holiday}시간) = ${n(k.hourly)}원<br>`
+      : `- 통상시급: ${n(k.hourly)}원 (일급 ${n(k.W)}원 ÷ ${k.H}시간)<br>
+ - 주휴수당: 1주 소정근로일(${k.D}일)을 개근한 경우 주휴 ${k.holiday}시간분 <b>${n(k.weeklyPay)}원</b>을 별도 지급<br>`;
+    return comp + ` - 연장·야간·휴일근로: 근로기준법에 따라 통상시급 기준으로 지급. 상시 5인 이상 사업장은 50% 가산 (연장 1시간 ${n(k.ot)}원, 야간 가산 1시간당 ${n(k.night)}원, 휴일 8시간 이내 1시간 ${n(k.ot)}원). 토요일 등 휴무일 근로 중 1주 40시간 초과분은 연장근로로 본다.<br>`;
+  }
   let libsLoaded = null, draft = null, pads = {}, result = null, templates = [];
   const fmtBizNo = v => { const d = String(v || '').replace(/[^0-9]/g, '').slice(0, 10); return d.length > 5 ? d.slice(0, 3) + '-' + d.slice(3, 5) + '-' + d.slice(5) : d.length > 3 ? d.slice(0, 3) + '-' + d.slice(3) : d; };
   document.addEventListener('input', e => { if (e.target.matches && e.target.matches('input[data-bizno]')) { const f = fmtBizNo(e.target.value); if (f !== e.target.value) e.target.value = f; } });
@@ -59,9 +91,7 @@
 <li><b>근무일 및 휴일:</b> 매주 ${esc(d.days)} 근무, 주휴일 매주 ${esc(d.weeklyHoliday)}</li>
 <li><b>임금</b><br>
  - 일급: <b>${won(d.wage)}원</b> (세전, 식대·교통비 포함)<br>
- - 주휴수당: ${esc(d.weeklyPay)}<br>
- - 연장·야간·휴일근로: 근로기준법에 따라 지급 (상시 5인 이상 사업장은 통상임금의 50% 가산)<br>
- - 임금지급일: ${esc(d.payday)} (휴일인 경우 전일 지급) · 지급방법: 근로자 명의 예금통장 입금<br>
+${wageLines(d)} - 임금지급일: ${esc(d.payday)} (휴일인 경우 전일 지급) · 지급방법: 근로자 명의 예금통장 입금<br>
  - 사업주는 임금 지급 시 임금명세서를 교부하며, 숙련 단계가 오르면 변경된 일급을 서면(전자문서)으로 통지한다.</li>
 <li><b>연차유급휴가:</b> 근로기준법에서 정하는 바에 따라 부여한다.</li>
 <li><b>사회보험:</b> 고용보험·산재보험 가입. 국민연금·건강보험은 법정 요건(월 8일 또는 60시간 이상 등) 충족 시 가입.</li>
@@ -97,6 +127,8 @@ ${row('서명', sigImg(sig.worker, '근로자 서명'))}</table>
     if (missing.length) throw Error(missing.join(', ') + '을(를) 입력하세요.');
     if (!Number.isInteger(d.wage) || d.wage < 10000 || d.wage > 1000000) throw Error('일급을 1만~100만원 사이로 입력하세요.');
     if (d.end < d.start) throw Error('계약 종료일이 시작일보다 빠릅니다.');
+    if (wageBreakdown(d).over40) throw Error('1주 소정근로시간이 40시간을 넘습니다(근로기준법 제50조). 근무일을 월~금으로 두고, 토요일 근무는 연장근로로 처리하세요.');
+    if (!wageBreakdown(d).minOk) throw Error('통상시급이 2026년 최저시급(10,320원)보다 낮습니다. 일급을 확인하세요.');
     return d;
   }
 
@@ -134,10 +166,10 @@ ${row('서명', sigImg(sig.worker, '근로자 서명'))}</table>
     set('grade', worker?.grade || '입문'); set('wage', toMan(worker?.wage || roster.grades?.[worker?.grade || '입문']?.wage));
     set('start', today()); set('end', ''); set('site', '');
     set('timeStart', '08:30'); set('timeEnd', '17:30'); set('breakTime', '12:00~13:00 (1시간)');
-    set('days', '월~금'); set('weeklyHoliday', '일요일'); set('weeklyPay', '요건 충족 시 별도 지급'); set('payday', '매월 10일');
+    set('days', '월~금'); set('weeklyHoliday', '일요일'); set('weeklyPay', '일급에 포함 (계약서에 명시)'); set('payday', '매월 10일');
     ['bizName', 'ceo', 'bizNo', 'bizPhone', 'bizAddress', 'employerSigner'].forEach(k => set(k, ''));
     $('#ct_err').textContent = ''; $('#ct_tplMsg').textContent = '';
-    showPanel('contractPanel'); step(1);
+    showPanel('contractPanel'); step(1); window.__ctShowWage && window.__ctShowWage();
     try { templates = await api('templates'); } catch (e) { templates = []; $('#ct_tplMsg').textContent = e.message; }
     fillTemplateSelect(); applyTemplate($('#ct_template').value);
   };
@@ -161,6 +193,17 @@ ${row('서명', sigImg(sig.worker, '근로자 서명'))}</table>
   window.loadTemplateManager = async function () { if (!$('#tplList')) return; templates = await api('templates'); renderTemplateList(); };
 
   function bind() {
+    const showWage = () => {
+      const v = id => $('#ct_' + id).value, d = { wage: fromMan(v('wage')), timeStart: v('timeStart'), timeEnd: v('timeEnd'), breakTime: v('breakTime'), days: v('days'), weeklyPay: v('weeklyPay') };
+      const box = $('#ct_wageInfo'); if (!d.wage) { box.textContent = ''; return; }
+      const k = wageBreakdown(d), n = x => won(x);
+      box.innerHTML = (k.included ? `일급 ${n(k.W)}원 = 기본일급 <b>${n(k.base)}원</b> + 주휴수당 <b>${n(k.weeklyPay)}원</b>` : `일급 ${n(k.W)}원 · 주휴수당 별도 <b>${n(k.weeklyPay)}원</b>/주`)
+        + `<br>통상시급 <b>${n(k.hourly)}원</b> · 연장 1시간 <b>${n(k.ot)}원</b> (5인 이상) · 1일 ${k.H}시간 × 주 ${k.D}일`
+        + (k.over40 ? '<br><span class="err">⚠ 주 ' + k.weekly + '시간 — 소정근로는 주 40시간까지입니다. 토요일은 휴무일로 두고 근무 시 연장근로로 처리하세요.</span>' : '')
+        + (k.minOk ? '' : '<br><span class="err">⚠ 최저시급(10,320원)보다 낮습니다</span>');
+    };
+    ['wage', 'timeStart', 'timeEnd', 'breakTime', 'days', 'weeklyPay'].forEach(k => { $('#ct_' + k).addEventListener('input', showWage); $('#ct_' + k).addEventListener('change', showWage); });
+    window.__ctShowWage = showWage;
     $('#ct_template').onchange = e => applyTemplate(e.target.value);
     $('#ct_saveTemplate').onclick = saveTemplateFromForm;
     $('#tplForm').onsubmit = async e => {
@@ -206,7 +249,8 @@ ${row('서명', sigImg(sig.worker, '근로자 서명'))}</table>
       const canvas = await window.html2canvas(stage.firstElementChild, { scale: 2, backgroundColor: '#ffffff' });
       const { jsPDF } = window.jspdf, pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
       const img = canvas.toDataURL('image/jpeg', 0.88), w = 210, h = canvas.height * w / canvas.width;
-      for (let y = 0; y < h; y += 297) { if (y) pdf.addPage(); pdf.addImage(img, 'JPEG', 0, -y, w, h); }
+      if (h <= 297 * 1.35) { const f = Math.min(1, 297 / h); pdf.addImage(img, 'JPEG', (210 - w * f) / 2, 0, w * f, h * f); } // 한 장에 맞춤(서명이 잘리지 않게)
+      else for (let y = 0; y < h; y += 297) { if (y) pdf.addPage(); pdf.addImage(img, 'JPEG', 0, -y, w, h); }
       const buf = pdf.output('arraybuffer'); stage.innerHTML = '';
       const sha = [...new Uint8Array(await crypto.subtle.digest('SHA-256', buf))].map(x => x.toString(16).padStart(2, '0')).join('');
       const saved = await api('contracts', 'POST', { id: draft.id, workerId: draft.workerId, name: draft.name, phone: draft.phone, grade: draft.grade, wage: draft.wage,
