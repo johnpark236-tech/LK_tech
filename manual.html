@@ -52,57 +52,47 @@ footer{text-align:center;color:var(--muted);font-size:13px;padding:10px 16px 30p
 <ol>
 <li><a href="#roles">권한 한눈에 보기</a></li>
 <li><a href="#login">로그인</a></li>
-<li><a href="#staff">관리자 추가·승인 (운영자)</a></li>
+<li><a href="#join">관리자 등록 받기</a></li>
 <li><a href="#inbox">지원자·상담 확인</a></li>
 <li><a href="#hire">작업자 등록 (채용)</a></li>
 <li><a href="#template">근로계약서 양식 미리 작성</a></li>
 <li><a href="#contract">근로계약서 작성·서명</a></li>
 <li><a href="#send">계약서 사본 전달</a></li>
-<li><a href="#site">근무지 등록 (운영자)</a></li>
 <li><a href="#attendance">출퇴근 기록·승인</a></li>
 <li><a href="#payroll">월간 정산·CSV</a></li>
 <li><a href="#report">매월 신고 일정</a></li>
 <li><a href="#faq">자주 묻는 문제</a></li>
-<li><a href="#update">서버(Apps Script) 업데이트</a></li>
 </ol></nav>
 
 <section id="roles"><h2><span class="no">1</span>권한 한눈에 보기</h2>
 <div class="tbl"><table>
-<tr><th>기능</th><th>운영자</th><th>관리자</th><th>지원자</th></tr>
-<tr><td>기술자 지원 · 내 상담 · 근태 기록</td><td>✅</td><td>✅</td><td>✅</td></tr>
-<tr><td>상담함 (지원자 연락처·답변)</td><td>✅</td><td>✅</td><td>—</td></tr>
-<tr><td>인력 관리: 명부·정산 보기·CSV</td><td>✅</td><td>✅</td><td>—</td></tr>
-<tr><td>근로계약서 작성·서명, 양식(사업주 정보)</td><td>✅</td><td>✅ (본인 양식)</td><td>—</td></tr>
-<tr><td>출퇴근 승인·반려</td><td>✅</td><td>✅ (본인 기록 제외)</td><td>—</td></tr>
-<tr><td>채용 등록 · 일급 수정 (누가 했는지 시트에 기록)</td><td>✅</td><td>✅</td><td>—</td></tr>
-<tr><td>근무지 등록 · 관리자 승인/추가/해제</td><td>✅</td><td>—</td><td>—</td></tr>
+<tr><th>기능</th><th>관리자</th><th>지원자</th></tr>
+<tr><td>기술자 지원 · 내 상담 · 근태 기록</td><td>✅</td><td>✅</td></tr>
+<tr><td>상담함 (지원자 연락처·답변)</td><td>✅</td><td>—</td></tr>
+<tr><td>인력 관리: 명부·정산 보기·CSV</td><td>✅</td><td>—</td></tr>
+<tr><td>근로계약서 작성·서명, 양식(사업주 정보)</td><td>✅ (본인 양식)</td><td>—</td></tr>
+<tr><td>출퇴근 승인·반려</td><td>✅ (본인 기록 제외)</td><td>—</td></tr>
+<tr><td>채용 등록 · 일급 수정 (누가 했는지 기록됨)</td><td>✅</td><td>—</td></tr>
 </table></div>
-<p class="note"><b>운영자</b> = 서버(Apps Script)를 배포한 구글 계정. <b>관리자</b> = 운영자가 승인한 구글 계정. 지원자는 로그인 없이 신청합니다.</p>
+<p class="note"><b>관리자</b> = 승인받은 구글 계정으로 로그인한 사람. 지원자는 로그인 없이 신청합니다.</p>
 <a class="top" href="#">↑ 맨 위로</a></section>
 
 <section id="login"><h2><span class="no">2</span>로그인</h2>
 <ol class="steps">
 <li>홈페이지 맨 아래 <span class="btn sub">Google로 로그인</span>을 누르고 본인 구글 계정을 선택합니다.</li>
-<li>“○○@gmail.com 로그인됨”이 보이면 위쪽에 <span class="tab">상담함</span> <span class="tab">인력 관리</span> (운영자는 <span class="tab">관리자 승인</span>)이 나타납니다.</li>
+<li>“○○@gmail.com 로그인됨”이 보이면 위쪽에 <span class="tab">상담함</span> <span class="tab">인력 관리</span> <span class="tab">📖 매뉴얼</span>이 나타납니다.</li>
 <li>다 쓰면 맨 아래 <span class="btn sub">로그아웃</span>.</li>
 </ol>
-<p class="warn">“액세스 차단됨”이 뜨면 그 계정이 Google Cloud의 <b>테스트 사용자</b>에 없는 것입니다. 운영자에게 등록을 요청하세요. (<a href="#faq">자주 묻는 문제</a>)</p>
+<p class="warn">“액세스 차단됨”이 뜨면 그 계정이 Google Cloud의 <b>테스트 사용자</b>에 없는 것입니다. 담당 책임자에게 본인 구글 이메일을 알려 주고 등록을 요청하세요. (<a href="#faq">자주 묻는 문제</a>)</p>
 <a class="top" href="#">↑ 맨 위로</a></section>
 
-<section id="staff"><h2><span class="no">3</span>관리자 추가·승인 <small>(운영자)</small></h2>
-<h3>방법 A — 이메일로 바로 추가</h3>
+<section id="join"><h2><span class="no">3</span>관리자 등록 받기</h2>
 <ol class="steps">
-<li><span class="tab">관리자 승인</span> → <b>관리자 바로 추가</b>에 직원의 구글 이메일·이름·전화번호 입력</li>
-<li><span class="btn">관리자 추가·승인</span></li>
-<li><b>Google Cloud › 대상 › 테스트 사용자</b>에도 같은 이메일을 추가 (화면의 링크 이용)</li>
+<li>안내받은 주소(홈페이지 주소 끝에 <code>#staff</code>)로 들어갑니다.</li>
+<li>맨 아래 <span class="btn sub">Google로 로그인</span> → <span class="tab">관리자 신청</span>에 이름·전화번호를 넣고 신청합니다.</li>
+<li>승인되면 다시 로그인했을 때 <span class="tab">상담함</span> <span class="tab">인력 관리</span>가 보입니다. 휴대폰·PC 어디서든 같은 구글 계정으로 로그인하면 됩니다.</li>
 </ol>
-<h3>방법 B — 직원이 신청 → 승인</h3>
-<ol class="steps">
-<li>직원에게 홈페이지 주소 끝에 <code>#staff</code>를 붙인 주소를 보냅니다.</li>
-<li>직원이 구글 로그인 후 <span class="tab">관리자 신청</span>에 이름·전화번호를 넣고 신청</li>
-<li>운영자의 <span class="tab">관리자 승인 🟠1</span>에 표시 → <span class="btn">승인</span></li>
-</ol>
-<p class="note">권한을 뺄 때는 같은 목록에서 <span class="btn sub">권한 해제</span>. 관리자로 등록된 사람은 작업자 채용 목록에 나오지 않습니다.</p>
+<p class="note">관리자로 등록된 사람은 작업자 채용 목록에 나오지 않습니다.</p>
 <a class="top" href="#">↑ 맨 위로</a></section>
 
 <section id="inbox"><h2><span class="no">4</span>지원자·상담 확인</h2>
@@ -111,7 +101,6 @@ footer{text-align:center;color:var(--muted);font-size:13px;padding:10px 16px 30p
 <li>항목을 누르면 지원 내용(이름·전화번호)과 상담 대화가 열리고, 아래 칸에 답변을 보낼 수 있습니다.</li>
 <li>전화로 연락해 근무 여부를 정한 뒤 <a href="#hire">작업자 등록</a>으로 넘어갑니다.</li>
 </ol>
-<p class="note">구글 시트 <b>작업자신청</b> 탭에서도 모든 지원 내역을 볼 수 있습니다(운영자).</p>
 <a class="top" href="#">↑ 맨 위로</a></section>
 
 <section id="hire"><h2><span class="no">5</span>작업자 등록 (채용)</h2>
@@ -122,7 +111,7 @@ footer{text-align:center;color:var(--muted);font-size:13px;padding:10px 16px 30p
 <li><span class="btn">채용 등록</span> → 확인창에서 금액 확인 → 확인</li>
 </ol>
 <p class="note">일급은 그날 맡은 공정과 관계없이 <b>본인 숙련 단계 기준</b>입니다. 단계가 오르면 작업자 명부의 <span class="btn sub">수정</span>에서 단계·일급을 바꾸고 <a href="#contract">변경 계약서</a>를 다시 서명합니다.</p>
-<p class="note">채용 등록과 일급 수정은 <b>승인된 관리자 누구나</b> 할 수 있습니다. 누가 채용했는지·마지막으로 고쳤는지는 작업자 명부의 <b>채용</b> 칸과 구글 시트 <b>작업자</b> 탭(채용관리자·최종수정관리자·최종수정일)에 남습니다.</p>
+<p class="note">채용 등록과 일급 수정은 <b>승인된 관리자 누구나</b> 할 수 있습니다. 누가 채용했는지는 작업자 명부의 <b>채용</b> 칸에 표시되고, 이름에 손가락·마우스를 올리면 마지막으로 고친 사람도 보입니다.</p>
 <a class="top" href="#">↑ 맨 위로</a></section>
 
 <section id="template"><h2><span class="no">6</span>근로계약서 양식(사업주 정보) 미리 작성</h2>
@@ -145,7 +134,7 @@ footer{text-align:center;color:var(--muted);font-size:13px;padding:10px 16px 30p
 <li><span class="btn">서명 완료 · 저장</span> → PDF가 만들어져 회사 드라이브 <b>근로계약서 보관</b> 폴더에 저장</li>
 </ol>
 <p class="warn">주민등록번호는 계약서에 넣지 않습니다(4대보험 신고 때 따로 받음). 근로계약서는 <b>3년 보관</b>해야 합니다.</p>
-<p class="note">PDF 하단에 계약번호·서명 시각·대면 확인한 관리자 계정이 찍히고, 파일 고유값(SHA-256)을 시트에 저장해 위·변조를 확인할 수 있습니다.</p>
+<p class="note">PDF 하단에 계약번호·서명 시각·대면 확인한 관리자 계정이 찍히고, 파일 고유값(SHA-256)이 함께 보관되어 나중에 위·변조 여부를 확인할 수 있습니다.</p>
 <a class="top" href="#">↑ 맨 위로</a></section>
 
 <section id="send"><h2><span class="no">8</span>계약서 사본 전달</h2>
@@ -159,25 +148,15 @@ footer{text-align:center;color:var(--muted);font-size:13px;padding:10px 16px 30p
 </table></div>
 <p class="note">나중에 다시 필요하면 <span class="tab">인력 관리</span> → <b>근로계약서</b> 목록 → <span class="btn sub">PDF 받기</span>.</p>
 <a class="top" href="#">↑ 맨 위로</a></section>
-
-<section id="site"><h2><span class="no">9</span>근무지 등록 <small>(운영자)</small></h2>
-<ol class="steps">
-<li><span class="tab">근태 기록</span> → <b>근무지 주소·위치 등록</b></li>
-<li>근무지명, 실제 주소, 위도·경도 입력 — 현장에서 <span class="btn sub">현재 위치 사용</span>을 누르면 자동 입력</li>
-<li>허용 반경(기본 100m) 설정 후 <span class="btn">근무지 저장</span></li>
-</ol>
-<p class="note">허용 반경 밖에서는 출퇴근 버튼이 접수되지 않습니다.</p>
-<a class="top" href="#">↑ 맨 위로</a></section>
-
-<section id="attendance"><h2><span class="no">10</span>출퇴근 기록·승인</h2>
+<section id="attendance"><h2><span class="no">9</span>출퇴근 기록·승인</h2>
 <ol class="steps">
 <li>작업자: 현장에서 <span class="tab">근태 기록</span> → 근무지 선택 → 동의 체크 → <span class="btn">출근 기록</span> / <span class="btn sub">퇴근 기록</span></li>
 <li>관리자: 같은 화면 아래 <b>근태 승인</b>에서 기록별 <span class="btn">승인</span> / <span class="btn sub">반려</span>(사유 입력)</li>
 </ol>
-<p class="note">출근·퇴근이 <b>둘 다 승인된 날</b>만 근무일로 계산됩니다. 본인 기록은 다른 관리자가 승인해야 합니다.</p>
+<p class="note">근무지 선택 목록이 비어 있으면 담당 책임자에게 현장 주소 등록을 요청하세요. 출근·퇴근이 <b>둘 다 승인된 날</b>만 근무일로 계산됩니다. 본인 기록은 다른 관리자가 승인해야 합니다.</p>
 <a class="top" href="#">↑ 맨 위로</a></section>
 
-<section id="payroll"><h2><span class="no">11</span>월간 정산·CSV</h2>
+<section id="payroll"><h2><span class="no">10</span>월간 정산·CSV</h2>
 <ol class="steps">
 <li><span class="tab">인력 관리</span> → <b>월간 정산</b>에서 월 선택 → <span class="btn sub">정산 새로고침</span></li>
 <li>사람별 근무일·시간·지급총액·소득세·지방세·고용보험(0.9%)·실지급액 확인</li>
@@ -192,7 +171,7 @@ footer{text-align:center;color:var(--muted);font-size:13px;padding:10px 16px 30p
 <p class="note">소득세 = (일급 − 15만원) × 6% × 45%, 월 1회 지급 기준, 1,000원 미만은 0원(소액부징수). 신고 전 세무대리인 금액과 비교해 보세요.</p>
 <a class="top" href="#">↑ 맨 위로</a></section>
 
-<section id="report"><h2><span class="no">12</span>매월 신고 일정</h2>
+<section id="report"><h2><span class="no">11</span>매월 신고 일정</h2>
 <div class="tbl"><table>
 <tr><th>마감</th><th>할 일</th><th>어디서</th></tr>
 <tr><td>매월 10일</td><td>원천세 신고·납부 (전월 지급분)</td><td>홈택스</td></tr>
@@ -203,25 +182,13 @@ footer{text-align:center;color:var(--muted);font-size:13px;padding:10px 16px 30p
 <p class="note"><span class="tab">인력 관리</span> 맨 위 <b>이번 달 신고 마감</b>에 D-day가 표시됩니다. 주민등록번호는 시스템에 저장하지 않으므로 신고 화면에서 직접 입력하세요.</p>
 <a class="top" href="#">↑ 맨 위로</a></section>
 
-<section id="faq"><h2><span class="no">13</span>자주 묻는 문제</h2>
+<section id="faq"><h2><span class="no">12</span>자주 묻는 문제</h2>
 <h3>“계약서” 버튼이 안 보여요</h3><p>아직 <a href="#hire">채용 등록</a>이 안 된 사람입니다. 또는 로그인한 계정이 관리자 승인을 받지 않았습니다.</p>
-<h3>구글 로그인 시 “액세스 차단됨”</h3><p>로그인 앱이 ‘테스트 중’이라 등록된 계정만 로그인됩니다. 운영자가 <b>Google Cloud › Google 인증 플랫폼 › 대상 › 테스트 사용자</b>에 이메일을 추가하세요.</p>
-<h3>“아직 관리자 권한이 없습니다”</h3><p>로그인은 됐지만 승인 전입니다. 운영자가 <span class="tab">관리자 승인</span>에서 승인하면 됩니다.</p>
+<h3>구글 로그인 시 “액세스 차단됨”</h3><p>아직 로그인이 허용되지 않은 계정입니다. 담당 책임자에게 본인 구글 이메일을 알려 주세요.</p>
+<h3>“아직 관리자 권한이 없습니다”</h3><p>로그인은 됐지만 승인 전입니다. 승인이 끝나면 다시 로그인해 보세요.</p>
 <h3>“구글 로그인이 만료되었습니다”</h3><p>로그인은 약 1시간 유지됩니다. 맨 아래 <span class="btn sub">Google로 로그인</span>을 다시 누르세요.</p>
-<h3>계약서 저장 중 오류</h3><p>서버(Apps Script)에 최신 코드가 반영되지 않았거나 드라이브 권한이 없는 경우입니다. <a href="#update">서버 업데이트</a>를 해 주세요.</p>
-<h3>전화번호 앞자리 0이 빠져 보여요</h3><p>최신 서버 코드에서 자동으로 복원됩니다. <a href="#update">서버 업데이트</a>를 확인하세요.</p>
+<h3>계약서 저장 중 오류</h3><p>잠시 후 다시 시도하고, 계속되면 화면에 나온 문구를 담당 책임자에게 알려 주세요.</p>
 <h3>근로자가 계약서를 다시 달라고 해요</h3><p>처음 보낸 <b>다운로드 링크</b>로 언제든 받을 수 있습니다. 링크를 잃어버렸으면 근로계약서 목록에서 <span class="btn sub">PDF 받기</span> 후 다시 보내 주세요.</p>
-<a class="top" href="#">↑ 맨 위로</a></section>
-
-<section id="update"><h2><span class="no">14</span>서버(Apps Script) 업데이트 <small>(운영자)</small></h2>
-<p>홈페이지 화면은 자동으로 바뀌지만, 저장·계산을 하는 서버 코드는 운영자가 직접 반영해야 합니다.</p>
-<ol class="steps">
-<li>관리 시트 <b>LK 테크 채용·근태 관리</b> → 확장 프로그램 → <b>Apps Script</b></li>
-<li>기존 코드를 모두 지우고 새 <code>Code.gs</code> 붙여넣기 → 저장(Ctrl+S)</li>
-<li>함수 <code>install</code> 선택 → ▶ 실행 → 새 권한이 나오면 허용</li>
-<li><b>배포 → 배포 관리 → 연필(수정) → 버전: 새 버전 → 배포</b></li>
-</ol>
-<p class="warn">“새 배포”를 누르면 서버 주소가 바뀌어 홈페이지 연결이 끊깁니다. 반드시 <b>배포 관리</b>에서 수정하세요.</p>
 <a class="top" href="#">↑ 맨 위로</a></section>
 </main>
 <footer>LK 테크 현장 인력관리 · 관리자 매뉴얼 · 법령·세율은 바뀔 수 있으니 신고 전 세무대리인·공단 안내를 확인하세요.</footer>
