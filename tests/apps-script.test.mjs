@@ -34,3 +34,11 @@ assert.equal(p.dayCount,8);assert.equal(p.alert,'enroll');assert.equal(p.gross,1
 assert.equal(ctx.settle_(150000,20).incomeTax,0);assert.equal(ctx.settle_(160000,3).incomeTax,0);assert.equal(ctx.settle_(170000,5).incomeTax,2700);
 assert.throws(()=>call('payroll?month='+month,{},'GET',tokenA));
 console.log('PASS: Sheets writes, required contact and consent, private chat, admin approval, location radius, duplicate clocks and monthly approval, worker roster, payroll tax and 8-day alert');
+// 운영자가 이메일로 관리자 바로 추가
+assert.throws(()=>call('staff/add',{email:'new@example.com'},'POST',tokenB,STF),/운영자만/);
+assert.throws(()=>call('staff/add',{email:'not-an-email'},'POST',tokenA,OWN),/이메일/);
+assert.equal(call('staff/add',{email:'New@Example.com',name:'신규 관리자'},'POST',tokenA,OWN).id,'google:new@example.com');
+assert.equal(call('staff',{},'GET',tokenA,OWN).find(r=>r.id==='google:new@example.com').status,'active');
+call('staff',{id:'google:new@example.com',status:'disabled'},'POST',tokenA,OWN);call('staff/add',{email:'new@example.com'},'POST',tokenA,OWN);
+assert.equal(call('staff',{},'GET',tokenA,OWN).filter(r=>r.id==='google:new@example.com').length,1);
+console.log('PASS: owner adds admin by email');
