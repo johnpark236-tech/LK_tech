@@ -46,3 +46,9 @@ console.log('PASS: owner adds admin by email');
 assert.equal(ctx.cellText_('01071423011'),"'01071423011");assert.equal(ctx.phone_(1071423011),'01071423011');assert.equal(ctx.phone_('01012345678'),'01012345678');assert.equal(ctx.phone_(''),'');
 data.get('관리자신청').push(['google:old@example.com','2026-10-31','기존',1071423011,'pending','','']);assert.equal(call('staff',{},'GET',tokenA,OWN).find(r=>r.id==='google:old@example.com').phone,'01071423011');
 console.log('PASS: phone leading zero');
+// 관리자로 등록된 사람은 작업자 채용 목록에서 제외 (전화번호 또는 계정 일치)
+data.get('작업자신청').push(['s1','guest:'+'c'.repeat(64),'2026-10-31T01:00:00Z','김석호',1033334444,'접수',''],['s2','guest:'+'d'.repeat(64),'2026-10-31T02:00:00Z','일반지원자','01055556666','접수','']);
+data.get('관리자신청').push(['google:ksh@example.com','2026-10-31','김석호','01033334444','pending','','']);
+const r2=call('workers',{},'GET',tokenA,OWN);assert.deepEqual(r2.applicants.map(a=>a.name),['일반지원자']);assert.ok(r2.hiddenStaff>=1);
+call('staff',{id:'google:ksh@example.com',status:'disabled'},'POST',tokenA,OWN);assert.ok(call('workers',{},'GET',tokenA,OWN).applicants.some(a=>a.name==='김석호'),'disabled staff can be hired again');
+console.log('PASS: staff hidden from applicant list');
