@@ -4,7 +4,10 @@ const WEB_ORIGIN = 'https://johnpark236-tech.github.io';
 function book_(){ return SpreadsheetApp.openById(SHEET_ID); }
 function tab_(name){const s=book_().getSheetByName(name);if(!s)throw Error('필요한 시트 없음: '+name);return s;}
 function rows_(name){const s=tab_(name),n=s.getLastRow();if(n>20000)throw Error('관리자에게 시트 정리를 요청해 주세요.');return n<2?[]:s.getRange(2,1,n-1,s.getLastColumn()).getValues().map((v,i)=>({v,row:i+2}));}
-function cellText_(x){return typeof x==='string'&&/^[=+@-]/.test(x)?"'"+x:x;}
+/** 수식 주입 방지 + 0으로 시작하는 숫자(전화번호)가 숫자로 바뀌어 앞자리 0이 사라지지 않도록 텍스트로 저장 */
+function cellText_(x){return typeof x==='string'&&(/^[=+@-]/.test(x)||/^0[0-9]+$/.test(x))?"'"+x:x;}
+/** 이미 숫자로 저장된 전화번호(예: 1071423011)는 앞에 0을 복원 */
+function phone_(v){if(v===''||v==null)return '';const t=String(v);return typeof v==='number'&&/^[1-9][0-9]{7,9}$/.test(t)?'0'+t:t;}
 function add_(name,v){const s=tab_(name);s.getRange(s.getLastRow()+1,1,1,v.length).setValues([v.map(cellText_)]);}
 function update_(name,row,v){tab_(name).getRange(row,1,1,v.length).setValues([v.map(cellText_)]);}
 function hash_(s){return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,s,Utilities.Charset.UTF_8).map(b=>('0'+((b+256)%256).toString(16)).slice(-2)).join('');}
@@ -44,7 +47,7 @@ function actor_(p){
 function profile_(b){const name=typeof b.name==='string'?b.name.trim():'',phone=typeof b.phone==='string'?b.phone.replace(/[\s-]/g,''):'';if(!name||name.length>40)fail_('이름을 1~40자로 입력하세요.');if(!/^0[0-9]{8,10}$/.test(phone))fail_('올바른 국내 전화번호를 입력하세요.');if(b.consent!==true)fail_('정보 저장에 동의해 주세요.');return {name,phone};}
 function limited_(id){const cache=CacheService.getScriptCache(),key='limit:'+id+':'+day_(new Date()),n=Number(cache.get(key)||0);if(n>=20)fail_('신청 횟수가 많습니다. 잠시 후 다시 시도하세요.');cache.put(key,String(n+1),21600);}
 function notice_(id,type,name,phone,now){add_('알림대기',[id,now,type,name,phone,'대기','']);}
-function chat_(id){const msgs=rows_('상담기록').filter(r=>r.v[0]===id).map(r=>({time:stamp_(r.v[1]),role:r.v[2],text:String(r.v[3]),responder:r.v[4]||''}));const app=rows_('작업자신청').filter(r=>r.v[1]===id).at(-1);return {id,messages:msgs,application:app?{name:app.v[3],phone:String(app.v[4]),submitted:stamp_(app.v[2])}:null,pending:msgs.length>0&&msgs.at(-1).role!=='admin',updated:msgs.at(-1)?.time||stamp_(app?.v[2])||'',created:msgs[0]?.time||stamp_(app?.v[2])||''};}
+function chat_(id){const msgs=rows_('상담기록').filter(r=>r.v[0]===id).map(r=>({time:stamp_(r.v[1]),role:r.v[2],text:String(r.v[3]),responder:r.v[4]||''}));const app=rows_('작업자신청').filter(r=>r.v[1]===id).at(-1);return {id,messages:msgs,application:app?{name:app.v[3],phone:phone_(app.v[4]),submitted:stamp_(app.v[2])}:null,pending:msgs.length>0&&msgs.at(-1).role!=='admin',updated:msgs.at(-1)?.time||stamp_(app?.v[2])||'',created:msgs[0]?.time||stamp_(app?.v[2])||''};}
 function appendMessage_(id,role,text,name){add_('상담기록',[id,time_(),role,text,name||'']);}
 function distance_(a,b){const r=x=>x*Math.PI/180,h=Math.sin(r(b.lat-a.lat)/2)**2+Math.cos(r(a.lat))*Math.cos(r(b.lat))*Math.sin(r(b.lng-a.lng)/2)**2;return 6371000*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));}
 function site_(v){return {id:v[0],name:v[1],address:v[2],lat:Number(v[3]),lng:Number(v[4]),radius:Number(v[5])};}
@@ -55,7 +58,7 @@ function dispatch_(p){
  if(path==='apply'&&method==='POST'){const v=profile_(b);limited_(a.id);const apps=rows_('작업자신청').filter(r=>r.v[1]===a.id);if(apps.length&&Date.now()-Date.parse(stamp_(apps.at(-1).v[2]))<30000)fail_('이미 접수했습니다. 잠시 후 다시 시도하세요.');const id=uuid_();add_('작업자신청',[id,a.id,now,v.name,v.phone,'접수','']);notice_(id,'작업자',v.name,v.phone,now);appendMessage_(a.id,'user','기술자 지원\n이름: '+v.name+'\n전화번호: '+v.phone);appendMessage_(a.id,'bot','관리자가 검토 후 전화로 연락하여 근무 여부를 안내해 드립니다.');return {ok:true,message:'관리자가 검토 후 바로 연락하여 근무 여부를 안내해 드립니다.'};}
  if(path==='staff/request'&&method==='POST'){if(!a.email)fail_('관리자 신청은 구글 로그인 후 할 수 있습니다.');if(a.owner||a.staffStatus)fail_('이미 신청되었거나 등록된 관리자입니다.');const v=profile_(b);limited_(a.id);add_('관리자신청',[a.id,now,v.name,v.phone,'pending','','']);notice_(a.id,'관리자',v.name,v.phone,now);return {ok:true};}
  if(path==='staff/add'&&method==='POST'){if(!a.owner)fail_('관리자 추가는 운영자만 할 수 있습니다.');const email=String(b.email||'').trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>120)fail_('구글 계정 이메일을 확인하세요.');if(owners_().includes(email))fail_('운영자 계정은 따로 추가할 필요가 없습니다.');const name=String(b.name||'').trim().slice(0,40)||email.split('@')[0],phone=String(b.phone||'').replace(/[\s-]/g,'');if(phone&&!/^0[0-9]{8,10}$/.test(phone))fail_('올바른 국내 전화번호를 입력하세요.');const id='google:'+email,row=rows_('관리자신청').find(r=>r.v[0]===id);if(row){row.v[4]='active';row.v[5]=now;row.v[6]=a.name;if(b.name)row.v[2]=name;if(phone)row.v[3]=phone;update_('관리자신청',row.row,row.v);}else add_('관리자신청',[id,now,name,phone,'active',now,a.name]);return {ok:true,id};}
- if(path==='staff'){if(!a.owner)fail_('관리자 승인 권한이 없습니다.');if(method==='GET')return rows_('관리자신청').map(r=>({id:r.v[0],name:r.v[2],phone:String(r.v[3]),status:status_(r.v[4]),requested:stamp_(r.v[1])}));if(method==='POST'){if(!['active','disabled'].includes(b.status)||b.id==='owner')fail_('승인·해제만 가능합니다.');const row=rows_('관리자신청').find(r=>r.v[0]===b.id);if(!row)fail_('신청을 찾을 수 없습니다.');row.v[4]=b.status;row.v[5]=now;row.v[6]=a.name;update_('관리자신청',row.row,row.v);return {ok:true};}}
+ if(path==='staff'){if(!a.owner)fail_('관리자 승인 권한이 없습니다.');if(method==='GET')return rows_('관리자신청').map(r=>({id:r.v[0],name:r.v[2],phone:phone_(r.v[3]),status:status_(r.v[4]),requested:stamp_(r.v[1])}));if(method==='POST'){if(!['active','disabled'].includes(b.status)||b.id==='owner')fail_('승인·해제만 가능합니다.');const row=rows_('관리자신청').find(r=>r.v[0]===b.id);if(!row)fail_('신청을 찾을 수 없습니다.');row.v[4]=b.status;row.v[5]=now;row.v[6]=a.name;update_('관리자신청',row.row,row.v);return {ok:true};}}
  if(path==='chat'&&method==='GET')return chat_(a.id);
  if(path==='chat'&&method==='DELETE'){const apps=rows_('작업자신청').filter(r=>r.v[1]===a.id),ids=apps.map(r=>r.v[0]);for(const [sheet,filter] of [['상담기록',r=>r.v[0]===a.id],['작업자신청',r=>r.v[1]===a.id],['알림대기',r=>ids.includes(r.v[0])]])for(const row of rows_(sheet).filter(filter).reverse())tab_(sheet).deleteRow(row.row);return {ok:true};}
  if((path==='chat'||path==='reply')&&method==='POST'){if(path==='reply'&&!a.admin)fail_('관리자만 답변할 수 있습니다.');if(path==='chat'&&b.consent!==true)fail_('정보 저장에 동의하세요.');const text=typeof b.text==='string'?b.text.trim():'';if(!text||text.length>1500)fail_('1~1500자로 입력하세요.');const id=path==='reply'?String(b.id||''):a.id;if(!/^(guest:[a-f0-9]{64}|owner|google:[^\s@]+@[^\s@]+)$/.test(id))fail_('상담 대상을 확인하세요.');const chat=chat_(id);if(chat.messages.length>=300)fail_('상담 기록 한도입니다.');if(path==='chat'&&chat.updated&&Date.now()-Date.parse(chat.updated)<1500)fail_('잠시 후 다시 보내세요.');appendMessage_(id,path==='reply'?'admin':'user',text,a.name);if(path==='chat')appendMessage_(id,'bot',answer_(text)||'담당자 확인이 필요한 문의로 접수했습니다. 확인 후 안내드립니다.');return chat_(id);}
@@ -95,13 +98,13 @@ const GRADES = {
 };
 const RULES = {dailyExempt:150000,rate:0.06,taxCredit:0.55,localRate:0.1,employmentRate:0.009,smallTaxLimit:1000,enrollDays:8,enrollHours:60,warnDays:6,breakHours:1};
 
-function worker_(v){return {id:String(v[0]),visitorId:String(v[1]||''),name:String(v[2]),phone:String(v[3]||''),grade:String(v[4]),wage:Number(v[5]),status:status_(v[6]),registered:stamp_(v[7]),memo:String(v[8]||'')};}
+function worker_(v){return {id:String(v[0]),visitorId:String(v[1]||''),name:String(v[2]),phone:phone_(v[3]),grade:String(v[4]),wage:Number(v[5]),status:status_(v[6]),registered:stamp_(v[7]),memo:String(v[8]||'')};}
 
 function workers_(a,method,b){
   if(!a.admin)fail_('승인된 관리자만 볼 수 있습니다.');
   if(method==='GET'){
     const list=rows_('작업자').map(r=>worker_(r.v)),known=new Set(list.map(w=>w.visitorId).filter(Boolean)),seen=new Set();
-    const applicants=rows_('작업자신청').slice().reverse().filter(r=>{const id=String(r.v[1]);if(known.has(id)||seen.has(id))return false;seen.add(id);return true;}).map(r=>({visitorId:String(r.v[1]),name:String(r.v[3]),phone:String(r.v[4]),submitted:stamp_(r.v[2])}));
+    const applicants=rows_('작업자신청').slice().reverse().filter(r=>{const id=String(r.v[1]);if(known.has(id)||seen.has(id))return false;seen.add(id);return true;}).map(r=>({visitorId:String(r.v[1]),name:String(r.v[3]),phone:phone_(r.v[4]),submitted:stamp_(r.v[2])}));
     return {grades:GRADES,workers:list,applicants};
   }
   if(method!=='POST')fail_('지원하지 않는 요청입니다.');
