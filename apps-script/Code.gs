@@ -1,4 +1,6 @@
 /** LK 테크 Google Sheets 저장 API. 이 파일에는 관리자 비밀키가 없습니다. */
+/** 서버 코드 버전 — 기능을 바꿀 때마다 올립니다(홈페이지 '서버 업데이트'가 GitHub 최신 버전과 비교). */
+const CODE_VERSION = '2026.11.01-1';
 const SHEET_ID = '14nus_yGwAIZu5J29FULfIFVBRYFBXkXpgAvXuQAGcqI';
 const WEB_ORIGIN = 'https://johnpark236-tech.github.io';
 function book_(){ return SpreadsheetApp.openById(SHEET_ID); }
@@ -55,7 +57,8 @@ function site_(v){return {id:v[0],name:v[1],address:v[2],lat:Number(v[3]),lng:Nu
 function event_(v){const e={eventId:v[0],day:storedDay_(v[3]),kind:v[4],name:v[2],time:stamp_(v[5]),site:{id:v[6],name:v[7],address:v[8],lat:Number(v[17]),lng:Number(v[18]),radius:Number(v[19])},location:{lat:Number(v[9]),lng:Number(v[10]),accuracy:Number(v[11]),distance:Number(v[12])},status:status_(v[13])};if(v[14])e.review={time:stamp_(v[14]),name:v[15],reason:v[16]||''};return e;}
 function dispatch_(p){
  const a=actor_(p),path=String(p.path||'').split('?')[0],method=p.method||'GET',b=p.body||{},now=time_(),parts=String(p.path||'').split('?')[1]||'';const monthParam=parts.match(/(?:^|&)month=([^&]+)/),month=monthParam?decodeURIComponent(monthParam[1]):day_(new Date()).slice(0,7);
- if(path==='me')return {admin:a.admin,owner:a.owner,guest:!a.email,email:a.email,staffStatus:a.staffStatus,setup:false};
+ if(path==='me')return {admin:a.admin,owner:a.owner,guest:!a.email,email:a.email,staffStatus:a.staffStatus,setup:false,codeVersion:a.owner?CODE_VERSION:undefined};
+ if(path==='admin/update'&&method==='POST')return selfUpdate_(a,b);
  if(path==='apply'&&method==='POST'){const v=profile_(b);limited_(a.id);const apps=rows_('작업자신청').filter(r=>r.v[1]===a.id);if(apps.length&&Date.now()-Date.parse(stamp_(apps.at(-1).v[2]))<30000)fail_('이미 접수했습니다. 잠시 후 다시 시도하세요.');const id=uuid_();add_('작업자신청',[id,a.id,now,v.name,v.phone,'접수','']);notice_(id,'작업자',v.name,v.phone,now);appendMessage_(a.id,'user','기술자 지원\n이름: '+v.name+'\n전화번호: '+v.phone);appendMessage_(a.id,'bot','관리자가 검토 후 전화로 연락하여 근무 여부를 안내해 드립니다.');return {ok:true,message:'관리자가 검토 후 바로 연락하여 근무 여부를 안내해 드립니다.'};}
  if(path==='staff/request'&&method==='POST'){if(!a.email)fail_('관리자 신청은 구글 로그인 후 할 수 있습니다.');if(a.owner||a.staffStatus)fail_('이미 신청되었거나 등록된 관리자입니다.');const v=profile_(b);limited_(a.id);add_('관리자신청',[a.id,now,v.name,v.phone,'pending','','']);notice_(a.id,'관리자',v.name,v.phone,now);return {ok:true};}
  if(path==='staff/add'&&method==='POST'){if(!a.owner)fail_('관리자 추가는 운영자만 할 수 있습니다.');const email=String(b.email||'').trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>120)fail_('구글 계정 이메일을 확인하세요.');if(owners_().includes(email))fail_('운영자 계정은 따로 추가할 필요가 없습니다.');const name=String(b.name||'').trim().slice(0,40)||email.split('@')[0],phone=String(b.phone||'').replace(/[\s-]/g,'');if(phone&&!/^0[0-9]{8,10}$/.test(phone))fail_('올바른 국내 전화번호를 입력하세요.');const id='google:'+email,row=rows_('관리자신청').find(r=>r.v[0]===id);if(row){row.v[4]='active';row.v[5]=now;row.v[6]=a.name;if(b.name)row.v[2]=name;if(phone)row.v[3]=phone;update_('관리자신청',row.row,row.v);}else add_('관리자신청',[id,now,name,phone,'active',now,a.name]);return {ok:true,id};}
@@ -219,4 +222,35 @@ function templates_(a,method,b){
   if(b.id){const row=mine().find(r=>String(r.v[0])===String(b.id));if(!row)fail_('양식을 찾을 수 없습니다.');update_('계약서양식',row.row,v);return template_(v);}
   if(mine().length>=20)fail_('양식은 20개까지 저장할 수 있습니다.');
   add_('계약서양식',v);return template_(v);
+}
+
+/* ===== 서버 자체 업데이트: 운영자가 홈페이지 버튼으로 GitHub 최신 코드를 받아 같은 배포 주소에 새 버전 배포 =====
+   최초 1회: script.google.com/home/usersettings 에서 'Google Apps Script API' 사용 설정 + appsscript.json 매니페스트 반영 */
+const UPDATE_SOURCE = 'https://raw.githubusercontent.com/johnpark236-tech/LK_tech/main/apps-script/';
+function scriptApi_(method,path,body){
+  const res=UrlFetchApp.fetch('https://script.googleapis.com/v1/projects/'+ScriptApp.getScriptId()+path,{method,contentType:'application/json',payload:body?JSON.stringify(body):undefined,headers:{Authorization:'Bearer '+ScriptApp.getOAuthToken()},muteHttpExceptions:true});
+  const code=res.getResponseCode(),text=res.getContentText();
+  if(code===403&&/has not been used|is disabled|User has not enabled/i.test(text))fail_('Apps Script API가 꺼져 있습니다. script.google.com/home/usersettings 에서 "Google Apps Script API"를 사용으로 바꾼 뒤 다시 누르세요.');
+  if(code===403||code===401)fail_('업데이트 권한이 없습니다. 매니페스트(appsscript.json) 반영 후 권한을 다시 허용해야 합니다. (상세: '+text.slice(0,160)+')');
+  if(code>=300)fail_('Google 응답 오류 '+code+': '+text.slice(0,200));
+  return text?JSON.parse(text):{};
+}
+function selfUpdate_(a,b){
+  if(!a.owner)fail_('서버 업데이트는 운영자만 할 수 있습니다.');
+  const get=f=>{const r=UrlFetchApp.fetch(UPDATE_SOURCE+f+'?t='+Date.now(),{muteHttpExceptions:true});if(r.getResponseCode()!==200)fail_('GitHub에서 '+f+'를 받지 못했습니다.');return r.getContentText();};
+  const code=get('Code.gs'),manifest=get('appsscript.json');
+  const ver=(code.match(/const CODE_VERSION = '([^']+)'/)||[])[1];
+  if(!ver||!/function dispatch_\(/.test(code)||!/function selfUpdate_\(/.test(code))fail_('받은 코드가 올바르지 않아 업데이트를 멈췄습니다.');
+  const mf=JSON.parse(manifest);if(!mf.webapp||!Array.isArray(mf.oauthScopes))fail_('매니페스트 형식이 올바르지 않습니다.');
+  if(ver===CODE_VERSION&&!b.force)return {ok:true,updated:false,version:ver,message:'이미 최신 버전입니다.'};
+  // 배포 주소(홈페이지가 쓰는 /exec)의 배포 ID 찾기
+  const want=(String(b.deployUrl||'').match(/\/macros\/s\/([A-Za-z0-9_-]+)\/exec/)||[])[1];
+  const list=(scriptApi_('get','/deployments').deployments||[]).filter(d=>d.deploymentConfig&&d.deploymentConfig.versionNumber&&(d.entryPoints||[]).some(e=>e.entryPointType==='WEB_APP'));
+  const dep=list.find(d=>d.deploymentId===want)||(list.length===1?list[0]:null);
+  if(!dep)fail_('홈페이지와 연결된 배포를 찾지 못했습니다. (배포 '+list.length+'개)');
+  scriptApi_('put','/content',{files:[{name:'Code',type:'SERVER_JS',source:code},{name:'appsscript',type:'JSON',source:manifest}]});
+  const desc='홈페이지 업데이트 '+ver+' · '+Utilities.formatDate(new Date(),'Asia/Seoul','yyyy-MM-dd HH:mm')+' · '+(a.email||'');
+  const v=scriptApi_('post','/versions',{description:desc});
+  scriptApi_('put','/deployments/'+dep.deploymentId,{deploymentConfig:{scriptId:ScriptApp.getScriptId(),versionNumber:v.versionNumber,manifestFileName:'appsscript',description:desc}});
+  return {ok:true,updated:true,from:CODE_VERSION,version:ver,versionNumber:v.versionNumber,message:'서버를 '+ver+' 버전으로 업데이트했습니다.'};
 }
