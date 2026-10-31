@@ -49,9 +49,9 @@ function dispatch_(p){
 function doGet(){return ContentService.createTextOutput(JSON.stringify({ok:true,storage:'Google Sheets',version:1})).setMimeType(ContentService.MimeType.JSON);}
 function doPost(e){let p,output;const lock=LockService.getScriptLock();try{const raw=e.parameter?.payload||e.postData?.contents||'';if(raw.length>12000)fail_('요청이 너무 깁니다.');p=JSON.parse(raw);if(p.origin!==WEB_ORIGIN)fail_('요청 출처 오류');if(!lock.tryLock(10000))fail_('다른 요청 처리 중입니다. 다시 시도하세요.');output={ok:true,data:dispatch_(p)};}catch(error){output={ok:false,error:String(error.message||error)};}finally{if(lock.hasLock())lock.releaseLock();}if(p?.bridgeNonce&&/^[a-f0-9]{32}$/.test(p.bridgeNonce)){const safe=JSON.stringify({bridgeNonce:p.bridgeNonce,result:output}).replace(/</g,'\\u003c');return HtmlService.createHtmlOutput('<!doctype html><meta charset="utf-8"><script>window.top.postMessage('+safe+','+JSON.stringify(WEB_ORIGIN)+');</script>').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);}return ContentService.createTextOutput(JSON.stringify(output)).setMimeType(ContentService.MimeType.JSON);}
 
-function answer_(t){if(/회사|업체|모집주체|LK|엘케이/.test(t))return 'LK 테크 모집 안내입니다. 업무는 반도체 자동화설비 조립·제작이며, 근무 형태는 일용직(근로계약 체결, 고용·산재보험 가입)입니다. 기술자 지원에서 이름과 연락처를 남겨주시면 담당자가 확인 후 연락드립니다.';if(/나이|연령|성별|남성|여성|지원 자격/.test(t))return '나이·성별 제한 없이 설비 조립 작업이 가능한 분을 모집합니다. 초보도 지원할 수 있으며 성실한 출근과 근태를 중요하게 봅니다. 채용은 담당자 확인 후 확정됩니다.';if(/급여|일급|얼마|교통비|식대/.test(t)&&! /지급|언제|잔업|세금|실수령/.test(t))return '일급은 초급(자재 입고·부품 분류) 14만원, 중급(가조립) 15~16만원, 숙련(핵심 부품 조립·설치·셋업, 유경험자) 17만원 이상입니다. 모두 세전 금액이며 식대·교통비 포함입니다. 성별과 관계없이 담당 공정·경력·숙련도를 기준으로 정합니다. 일용근로소득은 하루 15만원까지 비과세라 세금 부담이 거의 없습니다.';if(/프리랜서|일용|근무 형태|고용 형태|보험|연락처|전화번호|카카오/.test(t))return '근무 형태는 일용직입니다. 근로계약서를 작성하고 고용보험·산재보험에 가입합니다. 기술자 지원에서 이름과 연락처를 남겨주시면 담당자가 확인 후 연락드립니다.';if(/숙소|기숙사/.test(t))return '숙소는 제공하지 않습니다.';if(/준비|공구|렌치|가위/.test(t))return '기본공구, 렌치 세트, 작업용 가위를 준비해 주세요.';if(/근무시간|근무일|요일|평일|주말|토요일|일요일|몇 시|몇시/.test(t))return '기본 평일(월~금), 근무시간은 08:30~17:30입니다. 휴게시간은 1시간이며, 잔업·주말 근무 여부는 담당자 확인이 필요합니다.';if(/근무지|지역|어디/.test(t))return '모집 지역은 둔포·직산·평택입니다. 실제 배치 주소는 담당자가 확인해 안내합니다.';if(/하는 일|업무|조립/.test(t))return '반도체 자동화설비 조립·제작 업무입니다. LK 테크가 도급받은 현장에서 LK 테크 현장책임자의 지도 아래 근무하며, 삼성 직접 채용 공고가 아닙니다.';if(/초보|경력/.test(t))return '초보 지원이 가능합니다. 성실한 출근과 근태를 중요하게 봅니다. 채용과 출근 확정은 담당자가 안내합니다.';return null;}
+function answer_(t){if(/회사|업체|모집주체|LK|엘케이/.test(t))return 'LK 테크 모집 안내입니다. 업무는 반도체 자동화설비 조립·제작이며, 근무 형태는 일용직(근로계약 체결, 고용·산재보험 가입)입니다. 기술자 지원에서 이름과 연락처를 남겨주시면 담당자가 확인 후 연락드립니다.';if(/나이|연령|성별|남성|여성|지원 자격/.test(t))return '나이·성별 제한 없이 설비 조립 작업이 가능한 분을 모집합니다. 초보도 지원할 수 있으며 성실한 출근과 근태를 중요하게 봅니다. 채용은 담당자 확인 후 확정됩니다.';if(/급여|일급|얼마|교통비|식대/.test(t)&&! /지급|언제|잔업|세금|실수령/.test(t))return '일급은 14만원부터 시작하며(세전, 식대·교통비 포함), 자재 입고부터 조립·설치·셋업까지 전 공정을 순환하며 배웁니다. 일급은 그날 맡은 공정이 아니라 본인의 숙련도·경력을 기준으로 정하며, 숙련도가 오르면 일급도 오릅니다. 유경험자는 면접 시 협의하며, 성별과 관계없이 같은 기준을 적용합니다. 일용근로소득은 하루 15만원까지 비과세라 세금 부담이 거의 없습니다.';if(/프리랜서|일용|근무 형태|고용 형태|보험|연락처|전화번호|카카오/.test(t))return '근무 형태는 일용직입니다. 근로계약서를 작성하고 고용보험·산재보험에 가입합니다. 기술자 지원에서 이름과 연락처를 남겨주시면 담당자가 확인 후 연락드립니다.';if(/숙소|기숙사/.test(t))return '숙소는 제공하지 않습니다.';if(/준비|공구|렌치|가위/.test(t))return '기본공구, 렌치 세트, 작업용 가위를 준비해 주세요.';if(/근무시간|근무일|요일|평일|주말|토요일|일요일|몇 시|몇시/.test(t))return '기본 평일(월~금), 근무시간은 08:30~17:30입니다. 휴게시간은 1시간이며, 잔업·주말 근무 여부는 담당자 확인이 필요합니다.';if(/근무지|지역|어디/.test(t))return '모집 지역은 둔포·직산·평택입니다. 실제 배치 주소는 담당자가 확인해 안내합니다.';if(/하는 일|업무|조립/.test(t))return '반도체 자동화설비 조립·제작 업무입니다. LK 테크가 도급받은 현장에서 LK 테크 현장책임자의 지도 아래 근무하며, 삼성 직접 채용 공고가 아닙니다.';if(/초보|경력/.test(t))return '초보 지원이 가능합니다. 성실한 출근과 근태를 중요하게 봅니다. 채용과 출근 확정은 담당자가 안내합니다.';return null;}
 
-/* ===== 인력 관리: 작업자 명부 · 공정별 일급 · 월간 정산 ===== */
+/* ===== 인력 관리: 작업자 명부 · 숙련 단계별 일급 · 월간 정산 ===== */
 const SCHEMA = {
   '작업자신청':['신청ID','방문자ID','접수시각','이름','전화번호','상태','관리메모'],
   '관리자신청':['방문자ID','신청시각','이름','전화번호','권한상태','승인시각','승인자'],
@@ -65,11 +65,11 @@ const SCHEMA = {
 /** 없는 시트만 만들고 기존 시트는 건드리지 않습니다. */
 function ensureSheets_(){const b=book_();for(const [name,head] of Object.entries(SCHEMA)){if(!b.getSheetByName(name)){const s=b.insertSheet(name);s.getRange(1,1,1,head.length).setValues([head]);s.setFrozenRows(1);}}}
 
-/** 공정 등급별 기본 일급(세전, 식대·교통비 포함). 작업자별로 수정 가능. */
+/** 숙련 단계별 기본 일급(세전, 식대·교통비 포함). 그날 맡은 공정과 무관하게 본인 단계 기준. 작업자별 수정 가능. */
 const GRADES = {
-  '초급':{label:'초급 · 자재 입고·부품 분류',wage:140000},
-  '중급':{label:'중급 · 가조립',wage:150000},
-  '숙련':{label:'숙련 · 핵심 부품 조립·설치·셋업',wage:170000}
+  '입문':{label:'입문 · 처음 시작, 선임 보조',wage:140000},
+  '숙련':{label:'숙련 · 공구 사용·가조립 단독 가능',wage:150000},
+  '전문':{label:'전문 · 핵심 조립·셋업 단독 가능',wage:170000}
 };
 const RULES = {dailyExempt:150000,rate:0.06,taxCredit:0.55,localRate:0.1,employmentRate:0.009,smallTaxLimit:1000,enrollDays:8,enrollHours:60,warnDays:6,breakHours:1};
 
