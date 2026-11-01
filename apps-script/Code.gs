@@ -1,6 +1,6 @@
 /** LK 테크 Google Sheets 저장 API. 이 파일에는 관리자 비밀키가 없습니다. */
 /** 서버 코드 버전 — 기능을 바꿀 때마다 올립니다(홈페이지 '서버 업데이트'가 GitHub 최신 버전과 비교). */
-const CODE_VERSION = '2026.11.01-4';
+const CODE_VERSION = '2026.11.01-5';
 const SHEET_ID = '14nus_yGwAIZu5J29FULfIFVBRYFBXkXpgAvXuQAGcqI';
 const WEB_ORIGIN = 'https://johnpark236-tech.github.io';
 function book_(){ return SpreadsheetApp.openById(SHEET_ID); }
@@ -234,7 +234,8 @@ const UPDATE_SOURCE = 'https://raw.githubusercontent.com/johnpark236-tech/LK_tec
 function scriptApi_(method,path,body){
   const res=UrlFetchApp.fetch('https://script.googleapis.com/v1/projects/'+ScriptApp.getScriptId()+path,{method,contentType:'application/json',payload:body?JSON.stringify(body):undefined,headers:{Authorization:'Bearer '+ScriptApp.getOAuthToken()},muteHttpExceptions:true});
   const code=res.getResponseCode(),text=res.getContentText();
-  if(code===403&&/has not been used|is disabled|User has not enabled/i.test(text))fail_('Apps Script API가 꺼져 있습니다. script.google.com/home/usersettings 에서 "Google Apps Script API"를 사용으로 바꾼 뒤 다시 누르세요.');
+  if(code===403&&/User has not enabled/i.test(text))fail_('Apps Script API가 꺼져 있습니다. 배포한 계정('+Session.getEffectiveUser().getEmail()+')으로 script.google.com/home/usersettings 에서 "Google Apps Script API"를 사용으로 바꾼 뒤 몇 분 후 다시 누르세요.');
+  if(code===403&&/has not been used|is disabled/i.test(text)){const pn=(text.match(/project[ =](\d+)/i)||[])[1]||'';fail_('Apps Script가 연결된 Google Cloud 프로젝트'+(pn?'('+pn+')':'')+'에서 Apps Script API가 꺼져 있습니다. console.cloud.google.com/apis/library/script.googleapis.com'+(pn?'?project='+pn:'')+' 에서 "사용"을 누른 뒤 몇 분 후 다시 누르세요.');}
   if(code===403||code===401)fail_('업데이트 권한이 없습니다. 매니페스트(appsscript.json) 반영 후 권한을 다시 허용해야 합니다. (상세: '+text.slice(0,160)+')');
   if(code>=300)fail_('Google 응답 오류 '+code+': '+text.slice(0,200));
   return text?JSON.parse(text):{};
