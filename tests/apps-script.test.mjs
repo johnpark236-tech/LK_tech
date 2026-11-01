@@ -104,10 +104,11 @@ const dep=calls.find(c=>c[0]==='put'&&c[1].includes('/deployments/'));assert.ok(
 remote=gs;assert.equal(call('admin/update',{deployUrl:url},'POST',tokenA,OWN).updated,false);
 assert.throws(()=>{remote=bad;call('admin/update',{deployUrl:'https://script.google.com/macros/s/NOPE/exec'},'POST',tokenA,OWN)},/배포를 찾지/);
 console.log('PASS: owner self-update from GitHub');}
-{const tokenS='5'.repeat(64);assert.equal(call('apply',{name:'설문자',phone:'010-5555-0001',consent:true,gear:['안전모','공구','해킹'],shoeSize:'265',suitSize:'XXL',career:'1~3년',tasks:['조립','x']},'POST',tokenS).ok,true);
-const row=data.get('작업자신청').at(-1);assert.deepEqual(row.slice(7,12),['안전모, 공구','265','','1~3년','조립'],'only whitelisted survey values are stored');
-assert.match(call('chat',{},'GET',tokenS).messages[0].text,/보유 장비: 안전모, 공구\n안전화 사이즈: 265\n경력: 1~3년/);
-const ap=call('workers',{},'GET',tokenA,OWN).applicants.find(a=>a.name==='설문자');assert.equal(ap.survey.career,'1~3년');assert.equal(ap.survey.gear,'안전모, 공구');
+{const tokenS='5'.repeat(64);assert.equal(call('apply',{name:'설문자',phone:'010-5555-0001',consent:true,gear:['안전모','크린 안전화','공구','크린복','해킹'],shoeSize:'265',suitSize:'XXL',career:'1~3년',tasks:['조립','x']},'POST',tokenS).ok,true);
+const row=data.get('작업자신청').at(-1);assert.deepEqual(row.slice(7,12),['안전모, 크린 안전화, 공구','265','','1~3년','조립'],'only whitelisted survey values are stored');
+assert.match(call('chat',{},'GET',tokenS).messages[0].text,/보유 장비: 안전모, 크린 안전화, 공구\n안전화 사이즈: 265\n경력: 1~3년/);
+const ap=call('workers',{},'GET',tokenA,OWN).applicants.find(a=>a.name==='설문자');assert.equal(ap.survey.career,'1~3년');assert.equal(ap.survey.gear,'안전모, 크린 안전화, 공구');
 console.log('PASS: applicant equipment/career survey');}
 {const tokenD='6'.repeat(64);const c1=call('chat',{text:'숙소',consent:true},'POST',tokenD);const c2=call('chat',{text:'숙소',consent:true},'POST',tokenD);assert.equal(c1.messages.length,2);assert.equal(c2.messages.length,2,'same question resent quickly is not answered twice');
 console.log('PASS: duplicate chat send ignored');}
+{const rows=data.get('작업자신청');rows[0][9]='크린복사이즈';const ctx2=ctx;ctx2.headerChecked_&&delete ctx2.headerChecked_['작업자신청'];vm.runInContext("headerChecked_['작업자신청']=false;tab_('작업자신청')",ctx);assert.equal(rows[0][9],'방진복사이즈');assert.equal(rows[0][3],'이름');console.log('PASS: renamed header migrated');}
