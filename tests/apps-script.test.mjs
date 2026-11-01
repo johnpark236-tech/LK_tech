@@ -109,3 +109,5 @@ const row=data.get('작업자신청').at(-1);assert.deepEqual(row.slice(7,12),['
 assert.match(call('chat',{},'GET',tokenS).messages[0].text,/보유 장비: 안전모, 공구\n안전화 사이즈: 265\n경력: 1~3년/);
 const ap=call('workers',{},'GET',tokenA,OWN).applicants.find(a=>a.name==='설문자');assert.equal(ap.survey.career,'1~3년');assert.equal(ap.survey.gear,'안전모, 공구');
 console.log('PASS: applicant equipment/career survey');}
+{const tokenD='6'.repeat(64);const c1=call('chat',{text:'숙소',consent:true},'POST',tokenD);const c2=call('chat',{text:'숙소',consent:true},'POST',tokenD);assert.equal(c1.messages.length,2);assert.equal(c2.messages.length,2,'same question resent quickly is not answered twice');
+console.log('PASS: duplicate chat send ignored');}
