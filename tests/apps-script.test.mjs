@@ -12,7 +12,7 @@ assert.throws(()=>call('me',{},'GET',tokenA,BAD),/확인되지/);assert.throws((
 const f0=fetches;call('me',{},'GET',tokenA,OWN);assert.equal(fetches,f0,'verified token is cached');
 assert.throws(()=>call('staff/request',{name:'담당자',phone:'01098765432',consent:true},'POST',tokenB),/구글 로그인/);assert.equal(call('me',{},'GET',tokenA,OWN).owner,true);
 assert.throws(()=>call('apply',{name:'홍길동',consent:true}));assert.throws(()=>call('apply',{name:'홍길동',phone:'01012345678',consent:false}));
-assert.equal(call('apply',{name:'홍길동',phone:'010-1234-5678',consent:true}).ok,true);assert.equal(data.get('작업자신청')[1][4],'01012345678');assert.equal(data.get('알림대기')[1][2],'작업자');assert.equal(call('chat',{},'GET',tokenB,STF).messages.length,0);
+assert.equal(call('apply',{name:'홍길동',phone:'010-1234-5678',consent:true}).ok,true);assert.equal(data.get('작업자신청')[1][4],'01012345678');{const h=data.get('작업자신청')[0];assert.equal(h[7],'보유장비');assert.equal(h[11],'경험공정');}assert.equal(data.get('알림대기')[1][2],'작업자');assert.equal(call('chat',{},'GET',tokenB,STF).messages.length,0);
 assert.equal(call('staff/request',{name:'담당자',phone:'01098765432',consent:true},'POST',tokenB,STF).ok,true);assert.throws(()=>call('admin',{},'GET',tokenB,STF));
 const staffId=call('staff',{},'GET',tokenA,OWN)[0].id;assert.equal(call('staff',{id:staffId,status:'active'},'POST',tokenA,OWN).ok,true);assert.equal(call('me',{},'GET',tokenB,STF).admin,true);assert.throws(()=>call('staff',{},'GET',tokenB,STF));
 const s=call('workplaces',{name:'시험 현장',address:'테스트용 주소',lat:36.88,lng:127.15,radius:100},'POST',tokenA,OWN);const point={siteId:s.id,name:'홍길동',lat:s.lat,lng:s.lng,accuracy:10,consent:true};
@@ -104,3 +104,8 @@ const dep=calls.find(c=>c[0]==='put'&&c[1].includes('/deployments/'));assert.ok(
 remote=gs;assert.equal(call('admin/update',{deployUrl:url},'POST',tokenA,OWN).updated,false);
 assert.throws(()=>{remote=bad;call('admin/update',{deployUrl:'https://script.google.com/macros/s/NOPE/exec'},'POST',tokenA,OWN)},/배포를 찾지/);
 console.log('PASS: owner self-update from GitHub');}
+{const tokenS='5'.repeat(64);assert.equal(call('apply',{name:'설문자',phone:'010-5555-0001',consent:true,gear:['안전모','공구','해킹'],shoeSize:'265',suitSize:'XXL',career:'1~3년',tasks:['조립','x']},'POST',tokenS).ok,true);
+const row=data.get('작업자신청').at(-1);assert.deepEqual(row.slice(7,12),['안전모, 공구','265','','1~3년','조립'],'only whitelisted survey values are stored');
+assert.match(call('chat',{},'GET',tokenS).messages[0].text,/보유 장비: 안전모, 공구\n안전화 사이즈: 265\n경력: 1~3년/);
+const ap=call('workers',{},'GET',tokenA,OWN).applicants.find(a=>a.name==='설문자');assert.equal(ap.survey.career,'1~3년');assert.equal(ap.survey.gear,'안전모, 공구');
+console.log('PASS: applicant equipment/career survey');}

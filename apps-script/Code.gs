@@ -1,6 +1,6 @@
 /** LK 테크 Google Sheets 저장 API. 이 파일에는 관리자 비밀키가 없습니다. */
 /** 서버 코드 버전 — 기능을 바꿀 때마다 올립니다(홈페이지 '서버 업데이트'가 GitHub 최신 버전과 비교). */
-const CODE_VERSION = '2026.11.01-1';
+const CODE_VERSION = '2026.11.01-2';
 const SHEET_ID = '14nus_yGwAIZu5J29FULfIFVBRYFBXkXpgAvXuQAGcqI';
 const WEB_ORIGIN = 'https://johnpark236-tech.github.io';
 function book_(){ return SpreadsheetApp.openById(SHEET_ID); }
@@ -47,10 +47,14 @@ function actor_(p){
   const id=owner?'owner':email?'google:'+email:'guest:'+hash_(p.token),entry=email&&!owner?rows_('관리자신청').find(r=>r.v[0]===id):null;
   return {id,email,owner,admin:owner||status_(entry?.v[4])==='active',name:owner?'운영자':entry?.v[2]||'',staffStatus:entry?status_(entry.v[4]):null};
 }
+const SURVEY={gear:['안전모','안전화','크린복','공구','조립용 장갑'],shoe:['230','235','240','245','250','255','260','265','270','275','280','285','290','295','300'],suit:['S','M','L','XL','2XL','3XL'],career:['처음','1년 미만','1~3년','3년 이상'],tasks:['자재 입고·분류','조립','설치·셋업']};
+function survey_(b){const pick=(v,list)=>Array.isArray(v)?[...new Set(v.map(String))].filter(x=>list.includes(x)):[];const one=(v,list)=>list.includes(String(v??''))?String(v):'';return {gear:pick(b.gear,SURVEY.gear).join(', '),shoe:one(b.shoeSize,SURVEY.shoe),suit:one(b.suitSize,SURVEY.suit),career:one(b.career,SURVEY.career),tasks:pick(b.tasks,SURVEY.tasks).join(', ')};}
+function surveyText_(v){return [v.gear&&'보유 장비: '+v.gear,v.shoe&&'안전화 사이즈: '+v.shoe,v.suit&&'크린복 사이즈: '+v.suit,v.career&&'경력: '+v.career,v.tasks&&'경험한 일: '+v.tasks].filter(Boolean).join('\n');}
+function surveyOf_(r){return {gear:String(r[7]||''),shoe:String(r[8]||''),suit:String(r[9]||''),career:String(r[10]||''),tasks:String(r[11]||'')};}
 function profile_(b){const name=typeof b.name==='string'?b.name.trim():'',phone=typeof b.phone==='string'?b.phone.replace(/[\s-]/g,''):'';if(!name||name.length>40)fail_('이름을 1~40자로 입력하세요.');if(!/^0[0-9]{8,10}$/.test(phone))fail_('올바른 국내 전화번호를 입력하세요.');if(b.consent!==true)fail_('정보 저장에 동의해 주세요.');return {name,phone};}
 function limited_(id){const cache=CacheService.getScriptCache(),key='limit:'+id+':'+day_(new Date()),n=Number(cache.get(key)||0);if(n>=20)fail_('신청 횟수가 많습니다. 잠시 후 다시 시도하세요.');cache.put(key,String(n+1),21600);}
 function notice_(id,type,name,phone,now){add_('알림대기',[id,now,type,name,phone,'대기','']);}
-function chat_(id){const msgs=rows_('상담기록').filter(r=>r.v[0]===id).map(r=>({time:stamp_(r.v[1]),role:r.v[2],text:String(r.v[3]),responder:r.v[4]||''}));const app=rows_('작업자신청').filter(r=>r.v[1]===id).at(-1);return {id,messages:msgs,application:app?{name:app.v[3],phone:phone_(app.v[4]),submitted:stamp_(app.v[2])}:null,pending:msgs.length>0&&msgs.at(-1).role!=='admin',updated:msgs.at(-1)?.time||stamp_(app?.v[2])||'',created:msgs[0]?.time||stamp_(app?.v[2])||''};}
+function chat_(id){const msgs=rows_('상담기록').filter(r=>r.v[0]===id).map(r=>({time:stamp_(r.v[1]),role:r.v[2],text:String(r.v[3]),responder:r.v[4]||''}));const app=rows_('작업자신청').filter(r=>r.v[1]===id).at(-1);return {id,messages:msgs,application:app?{name:app.v[3],phone:phone_(app.v[4]),submitted:stamp_(app.v[2]),survey:surveyOf_(app.v)}:null,pending:msgs.length>0&&msgs.at(-1).role!=='admin',updated:msgs.at(-1)?.time||stamp_(app?.v[2])||'',created:msgs[0]?.time||stamp_(app?.v[2])||''};}
 function appendMessage_(id,role,text,name){add_('상담기록',[id,time_(),role,text,name||'']);}
 function distance_(a,b){const r=x=>x*Math.PI/180,h=Math.sin(r(b.lat-a.lat)/2)**2+Math.cos(r(a.lat))*Math.cos(r(b.lat))*Math.sin(r(b.lng-a.lng)/2)**2;return 6371000*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));}
 function site_(v){return {id:v[0],name:v[1],address:v[2],lat:Number(v[3]),lng:Number(v[4]),radius:Number(v[5])};}
@@ -59,7 +63,7 @@ function dispatch_(p){
  const a=actor_(p),path=String(p.path||'').split('?')[0],method=p.method||'GET',b=p.body||{},now=time_(),parts=String(p.path||'').split('?')[1]||'';const monthParam=parts.match(/(?:^|&)month=([^&]+)/),month=monthParam?decodeURIComponent(monthParam[1]):day_(new Date()).slice(0,7);
  if(path==='me')return {admin:a.admin,owner:a.owner,guest:!a.email,email:a.email,staffStatus:a.staffStatus,setup:false,codeVersion:a.owner?CODE_VERSION:undefined};
  if(path==='admin/update'&&method==='POST')return selfUpdate_(a,b);
- if(path==='apply'&&method==='POST'){const v=profile_(b);limited_(a.id);const apps=rows_('작업자신청').filter(r=>r.v[1]===a.id);if(apps.length&&Date.now()-Date.parse(stamp_(apps.at(-1).v[2]))<30000)fail_('이미 접수했습니다. 잠시 후 다시 시도하세요.');const id=uuid_();add_('작업자신청',[id,a.id,now,v.name,v.phone,'접수','']);notice_(id,'작업자',v.name,v.phone,now);appendMessage_(a.id,'user','기술자 지원\n이름: '+v.name+'\n전화번호: '+v.phone);appendMessage_(a.id,'bot','관리자가 검토 후 전화로 연락하여 근무 여부를 안내해 드립니다.');return {ok:true,message:'관리자가 검토 후 바로 연락하여 근무 여부를 안내해 드립니다.'};}
+ if(path==='apply'&&method==='POST'){const v=profile_(b);limited_(a.id);const apps=rows_('작업자신청').filter(r=>r.v[1]===a.id);if(apps.length&&Date.now()-Date.parse(stamp_(apps.at(-1).v[2]))<30000)fail_('이미 접수했습니다. 잠시 후 다시 시도하세요.');const id=uuid_();const sv=survey_(b),st=surveyText_(sv);add_('작업자신청',[id,a.id,now,v.name,v.phone,'접수','',sv.gear,sv.shoe,sv.suit,sv.career,sv.tasks]);notice_(id,'작업자',v.name,v.phone,now);appendMessage_(a.id,'user','기술자 지원\n이름: '+v.name+'\n전화번호: '+v.phone+(st?'\n'+st:''));appendMessage_(a.id,'bot','관리자가 검토 후 전화로 연락하여 근무 여부를 안내해 드립니다.');return {ok:true,message:'관리자가 검토 후 바로 연락하여 근무 여부를 안내해 드립니다.'};}
  if(path==='staff/request'&&method==='POST'){if(!a.email)fail_('관리자 신청은 구글 로그인 후 할 수 있습니다.');if(a.owner||a.staffStatus)fail_('이미 신청되었거나 등록된 관리자입니다.');const v=profile_(b);limited_(a.id);add_('관리자신청',[a.id,now,v.name,v.phone,'pending','','']);notice_(a.id,'관리자',v.name,v.phone,now);return {ok:true};}
  if(path==='staff/add'&&method==='POST'){if(!a.owner)fail_('관리자 추가는 운영자만 할 수 있습니다.');const email=String(b.email||'').trim().toLowerCase();if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>120)fail_('구글 계정 이메일을 확인하세요.');if(owners_().includes(email))fail_('운영자 계정은 따로 추가할 필요가 없습니다.');const name=String(b.name||'').trim().slice(0,40)||email.split('@')[0],phone=String(b.phone||'').replace(/[\s-]/g,'');if(phone&&!/^0[0-9]{8,10}$/.test(phone))fail_('올바른 국내 전화번호를 입력하세요.');const id='google:'+email,row=rows_('관리자신청').find(r=>r.v[0]===id);if(row){row.v[4]='active';row.v[5]=now;row.v[6]=a.name;if(b.name)row.v[2]=name;if(phone)row.v[3]=phone;update_('관리자신청',row.row,row.v);}else add_('관리자신청',[id,now,name,phone,'active',now,a.name]);return {ok:true,id};}
  if(path==='staff'){if(!a.owner)fail_('관리자 승인 권한이 없습니다.');if(method==='GET')return rows_('관리자신청').map(r=>({id:r.v[0],name:r.v[2],phone:phone_(r.v[3]),status:status_(r.v[4]),requested:stamp_(r.v[1])}));if(method==='POST'){if(!['active','disabled'].includes(b.status)||b.id==='owner')fail_('승인·해제만 가능합니다.');const row=rows_('관리자신청').find(r=>r.v[0]===b.id);if(!row)fail_('신청을 찾을 수 없습니다.');row.v[4]=b.status;row.v[5]=now;row.v[6]=a.name;update_('관리자신청',row.row,row.v);return {ok:true};}}
@@ -84,7 +88,7 @@ function answer_(t){if(/회사|업체|모집주체|LK|엘케이/.test(t))return 
 
 /* ===== 인력 관리: 작업자 명부 · 숙련 단계별 일급 · 월간 정산 ===== */
 const SCHEMA = {
-  '작업자신청':['신청ID','방문자ID','접수시각','이름','전화번호','상태','관리메모'],
+  '작업자신청':['신청ID','방문자ID','접수시각','이름','전화번호','상태','관리메모','보유장비','안전화사이즈','크린복사이즈','경력','경험공정'],
   '관리자신청':['방문자ID','신청시각','이름','전화번호','권한상태','승인시각','승인자'],
   '근태기록':['기록ID','방문자ID','이름','근무일','구분','기록시각','근무지ID','근무지명','주소','위도','경도','위치오차(m)','거리(m)','승인상태','확인시각','확인자','반려사유','근무지위도','근무지경도','허용반경(m)'],
   '근무지':['근무지ID','근무지명','주소','위도','경도','허용반경(m)'],
@@ -118,7 +122,7 @@ function workers_(a,method,b){
     const digits=v=>phone_(v).replace(/[^0-9]/g,''),staff=rows_('관리자신청').filter(r=>status_(r.v[4])!=='disabled');
     const staffIds=new Set(staff.map(r=>String(r.v[0]))),staffPhones=new Set(staff.map(r=>digits(r.v[3])).filter(Boolean));
     let hiddenStaff=0;
-    const applicants=rows_('작업자신청').slice().reverse().filter(r=>{const id=String(r.v[1]);if(known.has(id)||seen.has(id))return false;seen.add(id);if(id==='owner'||staffIds.has(id)||staffPhones.has(digits(r.v[4]))){hiddenStaff++;return false;}return true;}).map(r=>({visitorId:String(r.v[1]),name:String(r.v[3]),phone:phone_(r.v[4]),submitted:stamp_(r.v[2])}));
+    const applicants=rows_('작업자신청').slice().reverse().filter(r=>{const id=String(r.v[1]);if(known.has(id)||seen.has(id))return false;seen.add(id);if(id==='owner'||staffIds.has(id)||staffPhones.has(digits(r.v[4]))){hiddenStaff++;return false;}return true;}).map(r=>({visitorId:String(r.v[1]),name:String(r.v[3]),phone:phone_(r.v[4]),submitted:stamp_(r.v[2]),survey:surveyOf_(r.v)}));
     return {grades:GRADES,workers:list,applicants,hiddenStaff};
   }
   if(method!=='POST')fail_('지원하지 않는 요청입니다.');
