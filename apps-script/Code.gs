@@ -1,11 +1,13 @@
 /** LK 테크 Google Sheets 저장 API. 이 파일에는 관리자 비밀키가 없습니다. */
 /** 서버 코드 버전 — 기능을 바꿀 때마다 올립니다(홈페이지 '서버 업데이트'가 GitHub 최신 버전과 비교). */
-const CODE_VERSION = '2026.11.01-5';
+const CODE_VERSION = '2026.11.01-6';
 const SHEET_ID = '14nus_yGwAIZu5J29FULfIFVBRYFBXkXpgAvXuQAGcqI';
 const WEB_ORIGIN = 'https://johnpark236-tech.github.io';
 function book_(){ return SpreadsheetApp.openById(SHEET_ID); }
 const headerChecked_={};
-function tab_(name){const b=book_();let s=b.getSheetByName(name);if(!s&&SCHEMA[name]){s=b.insertSheet(name);s.getRange(1,1,1,SCHEMA[name].length).setValues([SCHEMA[name]]);s.setFrozenRows(1);headerChecked_[name]=true;}if(!s)throw Error('필요한 시트 없음: '+name);if(SCHEMA[name]&&!headerChecked_[name]){headerChecked_[name]=true;const h=SCHEMA[name],cur=s.getRange(1,1,1,h.length).getValues()[0];if(h.some((x,i)=>!cur[i]))s.getRange(1,1,1,h.length).setValues([h.map((x,i)=>cur[i]||x)]);}return s;}
+/** 이름이 바뀐 시트 열 머리글: 예전 이름 → 새 이름 (기존 시트도 자동으로 고침) */
+const RENAMED_HEADERS_={'크린복사이즈':'방진복사이즈'};
+function tab_(name){const b=book_();let s=b.getSheetByName(name);if(!s&&SCHEMA[name]){s=b.insertSheet(name);s.getRange(1,1,1,SCHEMA[name].length).setValues([SCHEMA[name]]);s.setFrozenRows(1);headerChecked_[name]=true;}if(!s)throw Error('필요한 시트 없음: '+name);if(SCHEMA[name]&&!headerChecked_[name]){headerChecked_[name]=true;const h=SCHEMA[name],cur=s.getRange(1,1,1,h.length).getValues()[0];const keep=(c,x)=>c&&!(RENAMED_HEADERS_[c]===x);if(h.some((x,i)=>!keep(cur[i],x)))s.getRange(1,1,1,h.length).setValues([h.map((x,i)=>keep(cur[i],x)?cur[i]:x)]);}return s;}
 function rows_(name){const s=tab_(name),n=s.getLastRow();if(n>20000)throw Error('관리자에게 시트 정리를 요청해 주세요.');return n<2?[]:s.getRange(2,1,n-1,s.getLastColumn()).getValues().map((v,i)=>({v,row:i+2}));}
 /** 수식 주입 방지 + 0으로 시작하는 숫자(전화번호)가 숫자로 바뀌어 앞자리 0이 사라지지 않도록 텍스트로 저장 */
 function cellText_(x){return typeof x==='string'&&(/^[=+@-]/.test(x)||/^0[0-9]+$/.test(x))?"'"+x:x;}
@@ -47,9 +49,9 @@ function actor_(p){
   const id=owner?'owner':email?'google:'+email:'guest:'+hash_(p.token),entry=email&&!owner?rows_('관리자신청').find(r=>r.v[0]===id):null;
   return {id,email,owner,admin:owner||status_(entry?.v[4])==='active',name:owner?'운영자':entry?.v[2]||'',staffStatus:entry?status_(entry.v[4]):null};
 }
-const SURVEY={gear:['안전모','안전화','크린복','공구','조립용 장갑'],shoe:['230','235','240','245','250','255','260','265','270','275','280','285','290','295','300'],suit:['S','M','L','XL','2XL','3XL'],career:['처음','1년 미만','1~3년','3년 이상'],tasks:['자재 입고·분류','조립','설치·셋업']};
+const SURVEY={gear:['안전모','일반 안전화','크린 안전화','공구','조립용 장갑'],shoe:['230','235','240','245','250','255','260','265','270','275','280','285','290','295','300'],suit:['S','M','L','XL','2XL','3XL'],career:['처음','1년 미만','1~3년','3년 이상'],tasks:['자재 입고·분류','조립','설치·셋업']};
 function survey_(b){const pick=(v,list)=>Array.isArray(v)?[...new Set(v.map(String))].filter(x=>list.includes(x)):[];const one=(v,list)=>list.includes(String(v??''))?String(v):'';return {gear:pick(b.gear,SURVEY.gear).join(', '),shoe:one(b.shoeSize,SURVEY.shoe),suit:one(b.suitSize,SURVEY.suit),career:one(b.career,SURVEY.career),tasks:pick(b.tasks,SURVEY.tasks).join(', ')};}
-function surveyText_(v){return [v.gear&&'보유 장비: '+v.gear,v.shoe&&'안전화 사이즈: '+v.shoe,v.suit&&'크린복 사이즈: '+v.suit,v.career&&'경력: '+v.career,v.tasks&&'경험한 일: '+v.tasks].filter(Boolean).join('\n');}
+function surveyText_(v){return [v.gear&&'보유 장비: '+v.gear,v.shoe&&'안전화 사이즈: '+v.shoe,v.suit&&'방진복 사이즈(모자 포함): '+v.suit,v.career&&'경력: '+v.career,v.tasks&&'경험한 일: '+v.tasks].filter(Boolean).join('\n');}
 function surveyOf_(r){return {gear:String(r[7]||''),shoe:String(r[8]||''),suit:String(r[9]||''),career:String(r[10]||''),tasks:String(r[11]||'')};}
 function profile_(b){const name=typeof b.name==='string'?b.name.trim():'',phone=typeof b.phone==='string'?b.phone.replace(/[\s-]/g,''):'';if(!name||name.length>40)fail_('이름을 1~40자로 입력하세요.');if(!/^0[0-9]{8,10}$/.test(phone))fail_('올바른 국내 전화번호를 입력하세요.');if(b.consent!==true)fail_('정보 저장에 동의해 주세요.');return {name,phone};}
 function limited_(id){const cache=CacheService.getScriptCache(),key='limit:'+id+':'+day_(new Date()),n=Number(cache.get(key)||0);if(n>=20)fail_('신청 횟수가 많습니다. 잠시 후 다시 시도하세요.');cache.put(key,String(n+1),21600);}
@@ -88,7 +90,7 @@ function answer_(t){if(/회사|업체|모집주체|LK|엘케이/.test(t))return 
 
 /* ===== 인력 관리: 작업자 명부 · 숙련 단계별 일급 · 월간 정산 ===== */
 const SCHEMA = {
-  '작업자신청':['신청ID','방문자ID','접수시각','이름','전화번호','상태','관리메모','보유장비','안전화사이즈','크린복사이즈','경력','경험공정'],
+  '작업자신청':['신청ID','방문자ID','접수시각','이름','전화번호','상태','관리메모','보유장비','안전화사이즈','방진복사이즈','경력','경험공정'],
   '관리자신청':['방문자ID','신청시각','이름','전화번호','권한상태','승인시각','승인자'],
   '근태기록':['기록ID','방문자ID','이름','근무일','구분','기록시각','근무지ID','근무지명','주소','위도','경도','위치오차(m)','거리(m)','승인상태','확인시각','확인자','반려사유','근무지위도','근무지경도','허용반경(m)'],
   '근무지':['근무지ID','근무지명','주소','위도','경도','허용반경(m)'],
