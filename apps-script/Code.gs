@@ -1,6 +1,6 @@
 /** LK 테크 Google Sheets 저장 API. 이 파일에는 관리자 비밀키가 없습니다. */
 /** 서버 코드 버전 — 기능을 바꿀 때마다 올립니다(홈페이지 '서버 업데이트'가 GitHub 최신 버전과 비교). */
-const CODE_VERSION = '2026.11.02-1';
+const CODE_VERSION = '2026.11.04-1';
 const SHEET_ID = '14nus_yGwAIZu5J29FULfIFVBRYFBXkXpgAvXuQAGcqI';
 const WEB_ORIGIN = 'https://johnpark236-tech.github.io';
 function book_(){ return SpreadsheetApp.openById(SHEET_ID); }
@@ -18,6 +18,7 @@ function update_(name,row,v){tab_(name).getRange(row,1,1,v.length).setValues([v.
 function hash_(s){return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,s,Utilities.Charset.UTF_8).map(b=>('0'+((b+256)%256).toString(16)).slice(-2)).join('');}
 function stamp_(v){return v instanceof Date?v.toISOString():String(v||'');}
 function day_(d){return Utilities.formatDate(d,'Asia/Seoul','yyyy-MM-dd');}
+function storedMonth_(v){return v instanceof Date?Utilities.formatDate(v,'Asia/Seoul','yyyy-MM'):String(v||'').slice(0,7);}
 function storedDay_(v){return v instanceof Date?day_(v):String(v||'').slice(0,10);}
 function time_(){return new Date().toISOString();}
 function uuid_(){return Utilities.getUuid();}
@@ -80,6 +81,11 @@ function dispatch_(p){
  if(path==='workers')return workers_(a,method,b);
  if(path==='templates')return templates_(a,method,b);
  if(path.startsWith('contract'))return contracts_(a,path,method,b,parts);
+ if(path==='payslips'){if(!a.admin)fail_('승인된 관리자만 이용할 수 있습니다.');if(!/^20[0-9]{2}-(0[1-9]|1[0-2])$/.test(method==='GET'?month:String(b.month||'')))fail_('정산 월을 확인하세요.');
+  if(method==='GET')return rows_('임금명세서').filter(r=>storedMonth_(r.v[1])===month).map(r=>({visitorId:String(r.v[3]),payday:storedDay_(r.v[5]),gross:Number(r.v[8]),issuedBy:String(r.v[12]),issued:stamp_(r.v[13])}));
+  if(method==='POST'){const m=String(b.month),p=payroll_(m).people.find(x=>x.visitorId===String(b.visitorId||''));if(!p||!p.registered)fail_('일급이 등록된 작업자만 명세서를 발급할 수 있습니다.');if(!/^20[0-9]{2}-[0-9]{2}-[0-9]{2}$/.test(String(b.payday||'')))fail_('지급일을 확인하세요.');if(!/^[a-f0-9]{64}$/.test(String(b.sha256||'')))fail_('명세서 파일을 확인하세요.');
+   const ded=p.incomeTax+p.localTax+p.employment,v=[uuid_(),m,p.workerId,p.visitorId,p.name,String(b.payday),p.dayCount,p.wage,p.gross,ded,p.net,String(b.sha256),who_(a),now];add_('임금명세서',v);return {ok:true,issued:stamp_(now),issuedBy:who_(a),gross:p.gross,net:p.net};}
+  fail_('지원하지 않는 요청입니다.');}
  if(path==='payroll'){if(method!=='GET'||!a.admin)fail_('승인된 관리자만 볼 수 있습니다.');if(!/^20[0-9]{2}-(0[1-9]|1[0-2])$/.test(month))fail_('조회 월을 확인하세요.');return payroll_(month);}
  fail_('지원하지 않는 요청입니다.');
 }
@@ -99,6 +105,7 @@ const SCHEMA = {
   '작업자':['작업자ID','방문자ID','이름','전화번호','등급','일급','상태','등록일','메모','채용관리자','최종수정관리자','최종수정일'],
   '근로계약서':['계약ID','작업자ID','근로자','전화번호','계약시작','계약종료','숙련단계','일급','파일ID','파일명','SHA256','사업주서명자','대면확인관리자','완료시각','다운로드코드해시','상태'],
   '계약서양식':['양식ID','관리자ID','양식이름','사업체명','대표자','사업자등록번호','사업장주소','대표전화','기본근무장소','수정시각'],
+  '임금명세서':['발급ID','정산월','작업자ID','방문자ID','이름','지급일','근무일수','일급','지급총액','공제합계','실지급액','SHA256','발급관리자','발급시각'],
   '설정':['항목','값']
 };
 /** 없는 시트만 만들고 기존 시트는 건드리지 않습니다. */
