@@ -120,3 +120,8 @@ const r=call('payslips',{month,visitorId:p.visitorId,payday:'2026-12-10',sha256:
 const row=data.get('임금명세서').at(-1);assert.equal(row[8],p.gross);assert.equal(row[9],p.incomeTax+p.localTax+p.employment);assert.equal(row[10],p.net);
 const list=call('payslips?month='+month,{},'GET',tokenB,STF);assert.equal(list.length,1);assert.equal(list[0].visitorId,p.visitorId);assert.equal(list[0].payday,'2026-12-10');
 console.log('PASS: payslip issue log (server-computed amounts)');}
+{assert.equal(ctx.minWage_(2026).hourly,10320);assert.equal(ctx.minWage_(2027).hourly,10700);assert.equal(ctx.minWage_(2031).hourly,10700,'unknown future year uses latest known');assert.equal(ctx.minDaily_(2026),99072);assert.equal(ctx.minDaily_(2027),102720);
+assert.throws(()=>call('workers',{name:'저임금',grade:'입문',wage:90000},'POST',tokenA,OWN),/최저임금 미달/);
+const w=call('workers',{},'GET',tokenA,OWN);assert.ok(w.minWage.now.daily>=99072);
+const pay=call('payroll?month='+month,{},'GET',tokenB,STF);assert.ok(pay.minWage.hourly>=10320);assert.ok(pay.people.filter(p=>p.registered).every(p=>p.minOk===true));
+console.log('PASS: minimum wage table and guard');}

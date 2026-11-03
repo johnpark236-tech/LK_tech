@@ -31,7 +31,8 @@
     return { p, month, payday, s, d, ded, biz: b,
       baseTotal: s.base * d, weeklyTotal: s.weekly * d,
       empNo: String(p.workerId || p.visitorId || '').replace(/[^0-9a-zA-Z]/g, '').slice(0, 8).toUpperCase(),
-      issued: new Date().toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }) };
+      issued: new Date().toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' }),
+      mw: window.minWageOf ? window.minWageOf(Number(month.slice(0, 4))) : null };
   }
 
   function html(x) {
@@ -55,7 +56,7 @@ ${tr('고용보험', n(p.employment), '지급 총액 × 0.9%')}
 <tr class="tot"><th>공제 합계</th><td class="r">${n(x.ded)}</td><td class="c"></td></tr></table>
 <table class="ps-t net"><tr><th>실지급액</th><td class="r">${n(p.net)}원</td><td class="c">지급 총액 − 공제 합계</td></tr></table>
 <h2>근무 내역</h2><p class="ps-note">근무일수 <b>${x.d}일</b> · 근로시간 합계 <b>${p.hours}시간</b><br>근무일: ${esc(dayList)}<br>
-통상시급 ${n(x.s.hourly)}원 = 일급 ${n(p.wage)}원 × 5 ÷ 48 (1일 8시간 · 주 40시간 + 주휴 8시간 기준)</p>
+통상시급 ${n(x.s.hourly)}원 = 일급 ${n(p.wage)}원 × 5 ÷ 48 (1일 8시간 · 주 40시간 + 주휴 8시간 기준)<br>최저임금 확인: ${x.mw ? `통상시급 ${n(x.s.hourly)}원 ${p.wage * 5 / 48 >= x.mw ? '≥' : '<'} ${esc(x.month.slice(0, 4))}년 최저시급 ${n(x.mw)}원 ${p.wage * 5 / 48 >= x.mw ? '✓ 충족' : '✗ 미달'}` : '-'}</p>
 <p class="ps-foot">이 명세서는 근로기준법 제48조 제2항에 따라 교부합니다. 발급일 ${esc(x.issued)} · 문의: ${esc(x.biz.phone || x.biz.name || '담당자')}</p></div>`;
   }
 
@@ -107,6 +108,7 @@ ${tr('고용보험', n(p.employment), '지급 총액 × 0.9%')}
   window.issuePayslip = async function (p, month, payday) {
     if (!p || !p.registered || p.gross == null) throw Error('일급이 등록된 작업자만 발급할 수 있습니다.');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(payday || '')) throw Error('지급일을 선택하세요.');
+    if (p.minOk === false) throw Error(p.name + '님 일급이 최저임금에 미달합니다. 일급을 고친 뒤 발급하세요.');
     const x = data(p, month, payday), buf = await makePdf(x);
     const sha = [...new Uint8Array(await crypto.subtle.digest('SHA-256', buf))].map(v => v.toString(16).padStart(2, '0')).join('');
     const log = await api('payslips', 'POST', { month, visitorId: p.visitorId, payday, sha256: sha });

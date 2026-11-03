@@ -12,7 +12,11 @@
   const korDate = d => { const [y, m, dd] = String(d).split('-'); return y ? `${y}년 ${Number(m)}월 ${Number(dd)}일` : ''; };
 
   /* ---------- 일급 구성 자동 계산 (근로기준법 제17조: 임금의 구성항목·계산방법 명시) ---------- */
-  const MIN_WAGE = 10320; // 2026년 최저시급
+  // 연도별 최저시급 — 서버 Code.gs의 MIN_WAGE와 같게 유지 (매년 8월 고시 후 추가)
+  const LK_MIN_WAGE = window.LK_MIN_WAGE = { 2026: 10320, 2027: 10700 };
+  const minWageOf = window.minWageOf = year => { const ys = Object.keys(LK_MIN_WAGE).map(Number).sort((a, b) => a - b); let y = ys[0]; for (const k of ys) if (k <= year) y = k; return LK_MIN_WAGE[y]; };
+  // 계약 기간이 두 해에 걸치면 더 높은 해 기준으로 확인
+  const minFor = d => { const now = new Date().getFullYear(), ys = [d.start, d.end].filter(Boolean).map(x => Number(String(x).slice(0, 4))); const y = ys.length ? Math.max(...ys) : now; return { year: y, hourly: minWageOf(y) }; };
   const hm = t => { const m = String(t || '').match(/(\d{1,2}):(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
   function dailyHours(d) {
     const a = hm(d.timeStart), b = hm(d.timeEnd); if (a == null || b == null || b <= a) return 8;
@@ -31,7 +35,7 @@
     const included = /포함/.test(d.weeklyPay || '');
     const hourlyExact = included ? (W * D) / (weekly + holiday) : W / H;
     const hourly = Math.round(hourlyExact), base = included ? Math.round(hourlyExact * H) : W, weeklyPay = included ? W - base : Math.round(hourlyExact * holiday);
-    return { over40: weekly > 40, W, H, D, weekly, holiday, included, hourly, base, weeklyPay, ot: Math.round(hourlyExact * 1.5), night: Math.round(hourlyExact * 0.5), minOk: hourlyExact >= MIN_WAGE };
+    return { over40: weekly > 40, W, H, D, weekly, holiday, included, hourly, base, weeklyPay, ot: Math.round(hourlyExact * 1.5), night: Math.round(hourlyExact * 0.5), minWage: minFor(d), minOk: hourlyExact >= minFor(d).hourly };
   };
   function wageLines(d) {
     const k = wageBreakdown(d), n = x => won(x);
@@ -128,7 +132,7 @@ ${row('서명', sigImg(sig.worker, '근로자 서명'))}</table>
     if (!Number.isInteger(d.wage) || d.wage < 10000 || d.wage > 1000000) throw Error('일급을 1만~100만원 사이로 입력하세요.');
     if (d.end < d.start) throw Error('계약 종료일이 시작일보다 빠릅니다.');
     if (wageBreakdown(d).over40) throw Error('1주 소정근로시간이 40시간을 넘습니다(근로기준법 제50조). 근무일을 월~금으로 두고, 토요일 근무는 연장근로로 처리하세요.');
-    if (!wageBreakdown(d).minOk) throw Error('통상시급이 2026년 최저시급(10,320원)보다 낮습니다. 일급을 확인하세요.');
+    { const k = wageBreakdown(d); if (!k.minOk) throw Error('통상시급(' + won(k.hourly) + '원)이 ' + k.minWage.year + '년 최저시급(' + won(k.minWage.hourly) + '원)보다 낮습니다. 일급을 확인하세요.'); }
     return d;
   }
 
@@ -194,15 +198,15 @@ ${row('서명', sigImg(sig.worker, '근로자 서명'))}</table>
 
   function bind() {
     const showWage = () => {
-      const v = id => $('#ct_' + id).value, d = { wage: fromMan(v('wage')), timeStart: v('timeStart'), timeEnd: v('timeEnd'), breakTime: v('breakTime'), days: v('days'), weeklyPay: v('weeklyPay') };
+      const v = id => $('#ct_' + id).value, d = { start: v('start'), end: v('end'), wage: fromMan(v('wage')), timeStart: v('timeStart'), timeEnd: v('timeEnd'), breakTime: v('breakTime'), days: v('days'), weeklyPay: v('weeklyPay') };
       const box = $('#ct_wageInfo'); if (!d.wage) { box.textContent = ''; return; }
       const k = wageBreakdown(d), n = x => won(x);
       box.innerHTML = (k.included ? `일급 ${n(k.W)}원 = 기본일급 <b>${n(k.base)}원</b> + 주휴수당 <b>${n(k.weeklyPay)}원</b>` : `일급 ${n(k.W)}원 · 주휴수당 별도 <b>${n(k.weeklyPay)}원</b>/주`)
         + `<br>통상시급 <b>${n(k.hourly)}원</b> · 연장 1시간 <b>${n(k.ot)}원</b> (5인 이상) · 1일 ${k.H}시간 × 주 ${k.D}일`
         + (k.over40 ? '<br><span class="err">⚠ 주 ' + k.weekly + '시간 — 소정근로는 주 40시간까지입니다. 토요일은 휴무일로 두고 근무 시 연장근로로 처리하세요.</span>' : '')
-        + (k.minOk ? '' : '<br><span class="err">⚠ 최저시급(10,320원)보다 낮습니다</span>');
+        + (k.minOk ? `<br>✓ ${k.minWage.year}년 최저시급 ${n(k.minWage.hourly)}원 충족` : `<br><span class="err">⚠ ${k.minWage.year}년 최저시급(${n(k.minWage.hourly)}원)보다 낮습니다</span>`);
     };
-    ['wage', 'timeStart', 'timeEnd', 'breakTime', 'days', 'weeklyPay'].forEach(k => { $('#ct_' + k).addEventListener('input', showWage); $('#ct_' + k).addEventListener('change', showWage); });
+    ['wage', 'start', 'end', 'timeStart', 'timeEnd', 'breakTime', 'days', 'weeklyPay'].forEach(k => { $('#ct_' + k).addEventListener('input', showWage); $('#ct_' + k).addEventListener('change', showWage); });
     window.__ctShowWage = showWage;
     $('#ct_template').onchange = e => applyTemplate(e.target.value);
     $('#ct_saveTemplate').onclick = saveTemplateFromForm;

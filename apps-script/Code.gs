@@ -1,6 +1,6 @@
 /** LK 테크 Google Sheets 저장 API. 이 파일에는 관리자 비밀키가 없습니다. */
 /** 서버 코드 버전 — 기능을 바꿀 때마다 올립니다(홈페이지 '서버 업데이트'가 GitHub 최신 버전과 비교). */
-const CODE_VERSION = '2026.11.04-1';
+const CODE_VERSION = '2026.11.04-2';
 const SHEET_ID = '14nus_yGwAIZu5J29FULfIFVBRYFBXkXpgAvXuQAGcqI';
 const WEB_ORIGIN = 'https://johnpark236-tech.github.io';
 function book_(){ return SpreadsheetApp.openById(SHEET_ID); }
@@ -117,6 +117,12 @@ const GRADES = {
   '숙련':{label:'숙련 · 공구 사용·가조립 단독 가능',wage:150000},
   '전문':{label:'전문 · 핵심 조립·셋업 단독 가능',wage:170000}
 };
+/** 연도별 최저시급(고시 금액). 매년 8월 고시 후 다음 해 금액을 추가하세요. contract.js의 LK_MIN_WAGE도 같이 수정. */
+const MIN_WAGE = {2026:10320,2027:10700};
+function minWage_(year){const ys=Object.keys(MIN_WAGE).map(Number).sort((a,b)=>a-b);let y=ys[0];for(const k of ys)if(k<=year)y=k;return {year:Number(year),hourly:MIN_WAGE[y]};}
+/** 주휴수당 포함 일급의 최저 한도 = 최저시급 × 48 ÷ 5 (1일 8시간·주 40시간 + 주휴 8시간) */
+function minDaily_(year){return Math.ceil(minWage_(year).hourly*48/5);}
+function wageInfo_(){const y=Number(day_(new Date()).slice(0,4));return {now:{...minWage_(y),daily:minDaily_(y)},next:{...minWage_(y+1),daily:minDaily_(y+1)}};}
 const RULES = {dailyExempt:150000,rate:0.06,taxCredit:0.55,localRate:0.1,employmentRate:0.009,smallTaxLimit:1000,enrollDays:8,enrollHours:60,warnDays:6,breakHours:1};
 
 function worker_(v){return {id:String(v[0]),visitorId:String(v[1]||''),name:String(v[2]),phone:phone_(v[3]),grade:String(v[4]),wage:Number(v[5]),status:status_(v[6]),registered:stamp_(v[7]),memo:String(v[8]||''),hiredBy:String(v[9]||''),updatedBy:String(v[10]||''),updated:stamp_(v[11])};}
@@ -132,7 +138,7 @@ function workers_(a,method,b){
     const staffIds=new Set(staff.map(r=>String(r.v[0]))),staffPhones=new Set(staff.map(r=>digits(r.v[3])).filter(Boolean));
     let hiddenStaff=0;
     const applicants=rows_('작업자신청').slice().reverse().filter(r=>{const id=String(r.v[1]);if(known.has(id)||seen.has(id))return false;seen.add(id);if(id==='owner'||staffIds.has(id)||staffPhones.has(digits(r.v[4]))){hiddenStaff++;return false;}return true;}).map(r=>({visitorId:String(r.v[1]),name:String(r.v[3]),phone:phone_(r.v[4]),submitted:stamp_(r.v[2]),survey:surveyOf_(r.v)}));
-    return {grades:GRADES,workers:list,applicants,hiddenStaff};
+    return {grades:GRADES,workers:list,applicants,hiddenStaff,minWage:wageInfo_()};
   }
   if(method!=='POST')fail_('지원하지 않는 요청입니다.');
   // 승인된 관리자(운영자 포함) 누구나 채용 등록·수정 가능, 누가 했는지 시트에 기록
@@ -140,7 +146,7 @@ function workers_(a,method,b){
   if(!name||name.length>40)fail_('이름을 1~40자로 입력하세요.');
   if(phone&&!/^0[0-9]{8,10}$/.test(phone))fail_('올바른 국내 전화번호를 입력하세요.');
   if(!GRADES[b.grade])fail_('등급을 선택하세요.');
-  const wage=Number(b.wage);if(!Number.isInteger(wage)||wage<10000||wage>1000000)fail_('일급을 1만~100만원 사이 정수로 입력하세요.');
+  const wage=Number(b.wage);if(!Number.isInteger(wage)||wage<10000||wage>1000000)fail_('일급을 1만~100만원 사이 정수로 입력하세요.');const mw=wageInfo_().now;if(wage<mw.daily)fail_('최저임금 미달입니다. '+mw.year+'년 최저시급 '+mw.hourly.toLocaleString()+'원 기준, 주휴수당 포함 일급은 '+mw.daily.toLocaleString()+'원 이상이어야 합니다.');
   const status=b.status==='ended'?'ended':'active',memo=String(b.memo||'').slice(0,200);
   const visitorId=String(b.visitorId||'');if(visitorId&&!/^guest:[a-f0-9]{64}$/.test(visitorId))fail_('방문자 식별자를 확인하세요.');
   const all=rows_('작업자');
@@ -177,12 +183,12 @@ function payroll_(month){
     if(!days.length)continue;
     const w=byVisitor.get(visitorId),dayCount=days.length,hours=days.reduce((s,d)=>s+d.hours,0);
     const alert=dayCount>=RULES.enrollDays||hours>=RULES.enrollHours?'enroll':dayCount>=RULES.warnDays?'warn':null;
-    const base={visitorId,name:w?w.name:p.name,registered:!!w,workerId:w?w.id:'',phone:w?w.phone:'',grade:w?w.grade:'',wage:w?w.wage:null,days,dayCount,hours,alert};
+    const mw=minWage_(Number(month.slice(0,4)));const base={minOk:w?w.wage*5/48>=mw.hourly:null,visitorId,name:w?w.name:p.name,registered:!!w,workerId:w?w.id:'',phone:w?w.phone:'',grade:w?w.grade:'',wage:w?w.wage:null,days,dayCount,hours,alert};
     out.push(w?{...base,...settle_(w.wage,dayCount)}:{...base,gross:null,incomeTax:null,localTax:null,employment:null,net:null});
   }
   out.sort((x,y)=>x.name.localeCompare(y.name,'ko'));
   const sum=k=>out.reduce((s,p)=>s+(p[k]||0),0);
-  return {month,rules:RULES,people:out,totals:{people:out.length,days:sum('dayCount'),gross:sum('gross'),incomeTax:sum('incomeTax'),localTax:sum('localTax'),employment:sum('employment'),net:sum('net')}};
+  return {month,rules:RULES,minWage:{...minWage_(Number(month.slice(0,4))),daily:minDaily_(Number(month.slice(0,4)))},people:out,totals:{people:out.length,days:sum('dayCount'),gross:sum('gross'),incomeTax:sum('incomeTax'),localTax:sum('localTax'),employment:sum('employment'),net:sum('net')}};
 }
 
 /* ===== 전자 근로계약서: 대면 서명 PDF 보관 · 다운로드 코드 ===== */
