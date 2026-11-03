@@ -112,3 +112,11 @@ console.log('PASS: applicant equipment/career survey');}
 {const tokenD='6'.repeat(64);const c1=call('chat',{text:'숙소',consent:true},'POST',tokenD);const c2=call('chat',{text:'숙소',consent:true},'POST',tokenD);assert.equal(c1.messages.length,2);assert.equal(c2.messages.length,2,'same question resent quickly is not answered twice');
 console.log('PASS: duplicate chat send ignored');}
 {const rows=data.get('작업자신청');rows[0][9]='크린복사이즈';const ctx2=ctx;ctx2.headerChecked_&&delete ctx2.headerChecked_['작업자신청'];vm.runInContext("headerChecked_['작업자신청']=false;tab_('작업자신청')",ctx);assert.equal(rows[0][9],'방진복사이즈');assert.equal(rows[0][3],'이름');console.log('PASS: renamed header migrated');}
+{const pay=call('payroll?month='+month,{},'GET',tokenB,STF),p=pay.people.find(x=>x.registered);assert.ok(p,'registered worker in payroll');
+assert.throws(()=>call('payslips',{month,visitorId:p.visitorId,payday:'2026-12-10',sha256:'a'.repeat(64)},'POST',tokenA),/승인된 관리자/);
+assert.throws(()=>call('payslips',{month,visitorId:'nope',payday:'2026-12-10',sha256:'a'.repeat(64)},'POST',tokenB,STF),/일급이 등록된/);
+assert.throws(()=>call('payslips',{month,visitorId:p.visitorId,payday:'12/10',sha256:'a'.repeat(64)},'POST',tokenB,STF),/지급일/);
+const r=call('payslips',{month,visitorId:p.visitorId,payday:'2026-12-10',sha256:'b'.repeat(64),gross:1},'POST',tokenB,STF);assert.equal(r.gross,p.gross,'server-computed amount is logged, not client value');assert.match(r.issuedBy,/staff@example\.com/);
+const row=data.get('임금명세서').at(-1);assert.equal(row[8],p.gross);assert.equal(row[9],p.incomeTax+p.localTax+p.employment);assert.equal(row[10],p.net);
+const list=call('payslips?month='+month,{},'GET',tokenB,STF);assert.equal(list.length,1);assert.equal(list[0].visitorId,p.visitorId);assert.equal(list[0].payday,'2026-12-10');
+console.log('PASS: payslip issue log (server-computed amounts)');}
