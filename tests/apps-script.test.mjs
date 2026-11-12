@@ -125,3 +125,14 @@ assert.throws(()=>call('workers',{name:'저임금',grade:'입문',wage:90000},'P
 const w=call('workers',{},'GET',tokenA,OWN);assert.ok(w.minWage.now.daily>=99072);
 const pay=call('payroll?month='+month,{},'GET',tokenB,STF);assert.ok(pay.minWage.hourly>=10320);assert.ok(pay.people.filter(p=>p.registered).every(p=>p.minOk===true));
 console.log('PASS: minimum wage table and guard');}
+{const OLD='2025-01-01T00:00:00.000Z',NEW=new Date().toISOString(),pad=(a,n)=>a.concat(Array(n-a.length).fill(''));
+data.get('상담기록').push(pad(['guest:old',OLD,'user','옛 상담'],5),pad(['guest:old',OLD,'bot','답'],5),pad(['guest:mix',OLD,'user','옛'],5),pad(['guest:mix',NEW,'user','최근'],5));
+data.get('작업자신청').push(pad(['APPOLD','guest:old',OLD,'옛지원','01000000001','접수',''],12),pad(['APPHIRED','guest:h',OLD,'채용된분','01000000002','채용',''],12),pad(['APPNEW','guest:n',NEW,'새지원','01000000003','접수',''],12));
+data.get('알림대기').push(pad(['APPOLD',NEW,'작업자','옛지원','01000000001','대기',''],7));
+data.get('관리자신청').push(pad(['google:gone@example.com',OLD,'퇴사자','','해제',OLD,''],7),pad(['google:keep@example.com',OLD,'유지','','해제',NEW,''],7));
+const r=ctx.purge_(true);assert.equal(r.chats,2,'only visitors whose last chat is old');assert.equal(r.applications,1);assert.ok(r.notices>=1);assert.equal(r.staff,1);
+const ids=c=>data.get(c).slice(1).map(x=>x[0]);assert.ok(!ids('작업자신청').includes('APPOLD'));assert.ok(ids('작업자신청').includes('APPHIRED'),'hired kept');assert.ok(ids('작업자신청').includes('APPNEW'));
+assert.ok(!ids('상담기록').includes('guest:old'));assert.equal(ids('상담기록').filter(x=>x==='guest:mix').length,2,'recently active visitor kept whole');
+assert.ok(!ids('관리자신청').includes('google:gone@example.com'));assert.ok(ids('관리자신청').includes('google:keep@example.com'));
+assert.equal(ctx.purge_(false),null,'runs once per day');
+console.log('PASS: 6-month retention purge');}

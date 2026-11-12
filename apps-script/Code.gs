@@ -1,6 +1,6 @@
 /** LK 테크 Google Sheets 저장 API. 이 파일에는 관리자 비밀키가 없습니다. */
 /** 서버 코드 버전 — 기능을 바꿀 때마다 올립니다(홈페이지 '서버 업데이트'가 GitHub 최신 버전과 비교). */
-const CODE_VERSION = '2026.11.13-2';
+const CODE_VERSION = '2026.11.13-3';
 const SHEET_ID = '14nus_yGwAIZu5J29FULfIFVBRYFBXkXpgAvXuQAGcqI';
 const WEB_ORIGIN = 'https://johnpark236-tech.github.io';
 function book_(){ return SpreadsheetApp.openById(SHEET_ID); }
@@ -25,7 +25,7 @@ function uuid_(){return Utilities.getUuid();}
 function status_(s){return ({'대기':'pending','승인대기':'pending','인정':'approved','반려':'rejected','해제':'disabled','활동중':'active'})[s]||s;}
 function fail_(message){throw Error(message);}
 function ownerEditor_(){const a=Session.getActiveUser().getEmail(),b=Session.getEffectiveUser().getEmail();if(!a||a!==b)fail_('소유자만 실행할 수 있습니다.');}
-function install(){ownerEditor_();ensureSheets_();book_().setSpreadsheetTimeZone('Asia/Seoul');tab_('설정').getRange('B2').setValue('웹 앱 배포 후 연결 URL 등록 필요');onOpen();return '설치 완료. 운영자 계정: '+owners_().join(', ')+(clientId_()?'':' / GOOGLE_CLIENT_ID 설정 필요');}
+function install(){ownerEditor_();ensureSheets_();if(!ScriptApp.getProjectTriggers().some(t=>t.getHandlerFunction()==='purgeDaily'))ScriptApp.newTrigger('purgeDaily').timeBased().everyDays(1).atHour(3).create();book_().setSpreadsheetTimeZone('Asia/Seoul');tab_('설정').getRange('B2').setValue('웹 앱 배포 후 연결 URL 등록 필요');onOpen();return '설치 완료. 운영자 계정: '+owners_().join(', ')+(clientId_()?'':' / GOOGLE_CLIENT_ID 설정 필요');}
 function onOpen(){SpreadsheetApp.getUi().createMenu('LK 테크').addItem('로그인 설정 확인','showLoginSetup').addToUi();}
 function showLoginSetup(){ownerEditor_();SpreadsheetApp.getUi().alert('LK 테크 로그인 설정','운영자 구글 계정: '+owners_().join(', ')+'\nGoogle Client ID: '+(clientId_()||'미설정'),SpreadsheetApp.getUi().ButtonSet.OK);}
 /** 홈페이지 Google 로그인(OAuth 클라이언트 ID). 공개 값이며 비밀키가 아님. 스크립트 속성 GOOGLE_CLIENT_ID로도 설정 가능. */
@@ -56,6 +56,23 @@ function surveyText_(v){return [v.gear&&'보유 장비: '+v.gear,v.shoe&&'안전
 function surveyOf_(r){return {gear:String(r[7]||''),shoe:String(r[8]||''),suit:String(r[9]||''),career:String(r[10]||''),tasks:String(r[11]||'')};}
 function profile_(b){const name=typeof b.name==='string'?b.name.trim():'',phone=typeof b.phone==='string'?b.phone.replace(/[\s-]/g,''):'';if(!name||name.length>40)fail_('이름을 1~40자로 입력하세요.');if(!/^0[0-9]{8,10}$/.test(phone))fail_('올바른 국내 전화번호를 입력하세요.');if(b.consent!==true)fail_('정보 저장에 동의해 주세요.');return {name,phone};}
 function limited_(id){const cache=CacheService.getScriptCache(),key='limit:'+id+':'+day_(new Date()),n=Number(cache.get(key)||0);if(n>=20)fail_('신청 횟수가 많습니다. 잠시 후 다시 시도하세요.');cache.put(key,String(n+1),21600);}
+/** 개인정보 보유기간 자동 파기 (개인정보처리방침 3항): 하루 한 번, 첫 요청 때 또는 매일 트리거로 실행
+ *  - 상담기록: 마지막 상담 후 180일 지난 방문자의 상담 전부
+ *  - 작업자신청: '채용'되지 않고 접수 후 180일 지난 신청 (+ 해당 알림)
+ *  - 알림대기: 접수 후 180일 지난 알림
+ *  - 관리자신청: 해제·반려 후 180일 지난 계정
+ *  근로계약서·근태·임금(법정 보존 3~5년) 기록은 건드리지 않습니다. */
+const RETENTION_DAYS = 180;
+function purge_(force){const props=PropertiesService.getScriptProperties(),today=day_(new Date());if(!force&&props.getProperty('LAST_PURGE')===today)return null;props.setProperty('LAST_PURGE',today);
+  const cut=Date.now()-RETENTION_DAYS*864e5,ts=v=>v instanceof Date?v.getTime():Date.parse(v),old=v=>{const t=ts(v);return !!t&&t<cut;};
+  const drop=(sheet,filter)=>{const rows=rows_(sheet).filter(filter);for(const row of rows.slice().reverse())tab_(sheet).deleteRow(row.row);return rows.length;};
+  const last=new Map();for(const r of rows_('상담기록')){const t=ts(r.v[1])||0;last.set(r.v[0],Math.max(last.get(r.v[0])||0,t));}
+  const stale=new Set([...last].filter(([,t])=>t&&t<cut).map(([id])=>id));
+  const appIds=new Set(rows_('작업자신청').filter(r=>String(r.v[5])!=='채용'&&old(r.v[2])).map(r=>String(r.v[0])));
+  const out={chats:drop('상담기록',r=>stale.has(r.v[0])),applications:drop('작업자신청',r=>appIds.has(String(r.v[0]))),notices:drop('알림대기',r=>appIds.has(String(r.v[0]))||old(r.v[1])),
+    staff:drop('관리자신청',r=>['disabled','rejected'].includes(status_(r.v[4]))&&old(r.v[5]||r.v[1])),date:today};
+  props.setProperty('LAST_PURGE_RESULT',JSON.stringify(out));return out;}
+function purgeDaily(){purge_(true);}
 function notice_(id,type,name,phone,now){add_('알림대기',[id,now,type,name,phone,'대기','']);}
 function chat_(id){const msgs=rows_('상담기록').filter(r=>r.v[0]===id).map(r=>({time:stamp_(r.v[1]),role:r.v[2],text:String(r.v[3]),responder:r.v[4]||''}));const app=rows_('작업자신청').filter(r=>r.v[1]===id).at(-1);return {id,messages:msgs,application:app?{name:app.v[3],phone:phone_(app.v[4]),submitted:stamp_(app.v[2]),survey:surveyOf_(app.v)}:null,pending:msgs.length>0&&msgs.at(-1).role!=='admin',updated:msgs.at(-1)?.time||stamp_(app?.v[2])||'',created:msgs[0]?.time||stamp_(app?.v[2])||''};}
 function appendMessage_(id,role,text,name){add_('상담기록',[id,time_(),role,text,name||'']);}
@@ -64,7 +81,7 @@ function site_(v){return {id:v[0],name:v[1],address:v[2],lat:Number(v[3]),lng:Nu
 function event_(v){const e={eventId:v[0],day:storedDay_(v[3]),kind:v[4],name:v[2],time:stamp_(v[5]),site:{id:v[6],name:v[7],address:v[8],lat:Number(v[17]),lng:Number(v[18]),radius:Number(v[19])},location:{lat:Number(v[9]),lng:Number(v[10]),accuracy:Number(v[11]),distance:Number(v[12])},status:status_(v[13])};if(v[14])e.review={time:stamp_(v[14]),name:v[15],reason:v[16]||''};return e;}
 function dispatch_(p){
  const a=actor_(p),path=String(p.path||'').split('?')[0],method=p.method||'GET',b=p.body||{},now=time_(),parts=String(p.path||'').split('?')[1]||'';const monthParam=parts.match(/(?:^|&)month=([^&]+)/),month=monthParam?decodeURIComponent(monthParam[1]):day_(new Date()).slice(0,7);
- if(path==='me')return {admin:a.admin,owner:a.owner,guest:!a.email,email:a.email,staffStatus:a.staffStatus,setup:false,codeVersion:a.owner?CODE_VERSION:undefined};
+ if(path==='me')return {admin:a.admin,owner:a.owner,guest:!a.email,email:a.email,staffStatus:a.staffStatus,setup:false,codeVersion:a.owner?CODE_VERSION:undefined,purge:a.owner?JSON.parse(PropertiesService.getScriptProperties().getProperty('LAST_PURGE_RESULT')||'null'):undefined};
  if(path==='admin/update'&&method==='POST')return selfUpdate_(a,b);
  if(path==='apply'&&method==='POST'){const v=profile_(b);limited_(a.id);const apps=rows_('작업자신청').filter(r=>r.v[1]===a.id);if(apps.length&&Date.now()-Date.parse(stamp_(apps.at(-1).v[2]))<30000)fail_('이미 접수했습니다. 잠시 후 다시 시도하세요.');const id=uuid_();const sv=survey_(b),st=surveyText_(sv);add_('작업자신청',[id,a.id,now,v.name,v.phone,'접수','',sv.gear,sv.shoe,sv.suit,sv.career,sv.tasks]);notice_(id,'작업자',v.name,v.phone,now);appendMessage_(a.id,'user','기술자 지원\n이름: '+v.name+'\n전화번호: '+v.phone+(st?'\n'+st:''));appendMessage_(a.id,'bot','관리자가 검토 후 전화로 연락하여 근무 여부를 안내해 드립니다.');return {ok:true,message:'관리자가 검토 후 바로 연락하여 근무 여부를 안내해 드립니다.'};}
  if(path==='staff/request'&&method==='POST'){if(!a.email)fail_('관리자 신청은 구글 로그인 후 할 수 있습니다.');if(a.owner||a.staffStatus)fail_('이미 신청되었거나 등록된 관리자입니다.');const v=profile_(b);limited_(a.id);add_('관리자신청',[a.id,now,v.name,v.phone,'pending','','']);notice_(a.id,'관리자',v.name,v.phone,now);return {ok:true};}
@@ -90,9 +107,9 @@ function dispatch_(p){
  fail_('지원하지 않는 요청입니다.');
 }
 function doGet(){return ContentService.createTextOutput(JSON.stringify({ok:true,storage:'Google Sheets',version:1})).setMimeType(ContentService.MimeType.JSON);}
-function doPost(e){let p,output;const lock=LockService.getScriptLock();try{const raw=e.parameter?.payload||e.postData?.contents||'';if(raw.length>8000000)fail_('요청이 너무 깁니다.');p=JSON.parse(raw);if(p.origin!==WEB_ORIGIN)fail_('요청 출처 오류');if(!lock.tryLock(10000))fail_('다른 요청 처리 중입니다. 다시 시도하세요.');output={ok:true,data:dispatch_(p)};}catch(error){output={ok:false,error:String(error.message||error)};}finally{if(lock.hasLock())lock.releaseLock();}if(p?.bridgeNonce&&/^[a-f0-9]{32}$/.test(p.bridgeNonce)){const safe=JSON.stringify({bridgeNonce:p.bridgeNonce,result:output}).replace(/</g,'\\u003c');return HtmlService.createHtmlOutput('<!doctype html><meta charset="utf-8"><script>window.top.postMessage('+safe+','+JSON.stringify(WEB_ORIGIN)+');</script>').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);}return ContentService.createTextOutput(JSON.stringify(output)).setMimeType(ContentService.MimeType.JSON);}
+function doPost(e){let p,output;const lock=LockService.getScriptLock();try{const raw=e.parameter?.payload||e.postData?.contents||'';if(raw.length>8000000)fail_('요청이 너무 깁니다.');p=JSON.parse(raw);if(p.origin!==WEB_ORIGIN)fail_('요청 출처 오류');if(!lock.tryLock(10000))fail_('다른 요청 처리 중입니다. 다시 시도하세요.');try{purge_(false);}catch(_){}output={ok:true,data:dispatch_(p)};}catch(error){output={ok:false,error:String(error.message||error)};}finally{if(lock.hasLock())lock.releaseLock();}if(p?.bridgeNonce&&/^[a-f0-9]{32}$/.test(p.bridgeNonce)){const safe=JSON.stringify({bridgeNonce:p.bridgeNonce,result:output}).replace(/</g,'\\u003c');return HtmlService.createHtmlOutput('<!doctype html><meta charset="utf-8"><script>window.top.postMessage('+safe+','+JSON.stringify(WEB_ORIGIN)+');</script>').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);}return ContentService.createTextOutput(JSON.stringify(output)).setMimeType(ContentService.MimeType.JSON);}
 
-function answer_(t){if(/회사|업체|모집주체|LK|엘케이/.test(t))return 'LK 테크 모집 안내입니다. 업무는 반도체 자동화설비 조립·제작이며, 근무 형태는 일용직(근로계약 체결, 고용·산재보험 가입)입니다. 기술자 지원에서 이름과 연락처를 남겨주시면 담당자가 확인 후 연락드립니다.';if(/나이|연령|성별|남성|여성|지원 자격/.test(t))return '나이·성별 제한 없이 설비 조립 작업이 가능한 분을 모집합니다. 초보도 지원할 수 있으며 성실한 출근과 근태를 중요하게 봅니다. 채용은 담당자 확인 후 확정됩니다.';if(/급여|일급|얼마|교통비|식대/.test(t)&&! /지급|언제|잔업|세금|실수령/.test(t))return '일급은 12만원부터 시작하며(세전, 식대·교통비·주휴수당 포함), 근무한 날수만큼 지급되므로 월 지급액은 근무일수에 따라 달라집니다. 자재 입고부터 조립·설치·셋업까지 전 공정을 순환하며 배웁니다. 일급은 그날 맡은 공정이 아니라 본인의 숙련도·경력을 기준으로 정하며, 숙련도가 오르면 일급도 오릅니다. 유경험자는 면접 시 협의하며, 성별과 관계없이 같은 기준을 적용합니다.';if(/프리랜서|일용|근무 형태|고용 형태|보험|연락처|전화번호|카카오/.test(t))return '근무 형태는 일용직입니다. 근무일은 매주 확정해 문자로 안내하며, 일정에 따라 연속 근무도 가능합니다. 근로계약서를 작성하고 고용보험·산재보험에 가입합니다. 기술자 지원에서 이름과 연락처를 남겨주시면 담당자가 확인 후 연락드립니다.';if(/숙소|기숙사/.test(t))return '숙소는 제공하지 않습니다. 요청 시 검토 가능합니다.';if(/준비|공구|렌치|가위/.test(t))return '안전모·안전화·방진복·장갑 등 보호구와 현장 공구는 회사가 지급·준비합니다. 개인 공구(렌치·가위 등)가 손에 익었다면 가져오셔도 되지만 필수는 아니며, 일급과는 관계없습니다.';if(/근무시간|근무일|요일|평일|주말|토요일|일요일|몇 시|몇시/.test(t))return '근무일은 평일(월~금) 중에서 매주 확정해 문자로 안내합니다(일정에 따라 연속 근무 가능). 근무시간은 08:30~17:30(사업장마다 상이), 휴게시간은 1시간이며, 잔업·주말 근무 여부는 담당자 확인이 필요합니다.';if(/근무지|지역|어디/.test(t))return '모집 지역은 둔포·천안·직산(사업장마다 상이)입니다. 실제 배치 주소는 담당자가 확인해 안내합니다.';if(/하는 일|업무|조립/.test(t))return '반도체 자동화설비 조립·제작 업무입니다. LK 테크가 도급받은 현장에서 LK 테크 현장책임자의 지도 아래 근무하며, 삼성 직접 채용 공고가 아닙니다.';if(/초보|경력/.test(t))return '초보 지원이 가능합니다. 성실한 출근과 근태를 중요하게 봅니다. 채용과 출근 확정은 담당자가 안내합니다.';return null;}
+function answer_(t){if(/회사|업체|모집주체|LK|엘케이/.test(t))return 'LK 테크 모집 안내입니다. 업무는 반도체 자동화설비 조립·제작이며, 근무 형태는 일용직(근로계약 체결, 고용·산재보험 가입)입니다. 기술자 지원에서 이름과 연락처를 남겨주시면 담당자가 확인 후 연락드립니다.';if(/나이|연령|성별|남성|여성|지원 자격/.test(t))return '나이·성별 제한 없이 설비 조립 작업이 가능한 분을 모집합니다. 초보도 지원할 수 있으며 성실한 출근과 근태를 중요하게 봅니다. 채용은 담당자 확인 후 확정됩니다.';if(/급여|일급|얼마|교통비|식대/.test(t)&&! /지급|언제|잔업|세금|실수령/.test(t))return '일급은 12만원부터 시작하며(세전, 식대·교통비·주휴수당 포함), 근무한 날수만큼 지급되므로 월 지급액은 근무일수에 따라 달라집니다. 자재 입고부터 조립·설치·셋업까지 전 공정을 순환하며 배웁니다. 일급은 그날 맡은 공정이 아니라 본인의 숙련도·경력을 기준으로 정하며, 숙련도가 오르면 일급도 오릅니다. 유경험자는 면접 시 협의하며, 성별과 관계없이 같은 기준을 적용합니다.';if(/프리랜서|일용|근무 형태|고용 형태|보험|연락처|전화번호|카카오/.test(t))return '근무 형태는 일용직입니다. 근무일은 매주 확정해 문자로 안내하며, 일정에 따라 연속 근무도 가능합니다. 근로계약서를 작성하고 고용보험·산재보험에 가입합니다. 기술자 지원에서 이름과 연락처를 남겨주시면 담당자가 확인 후 연락드립니다.';if(/숙소|기숙사/.test(t))return '숙소는 제공하지 않습니다. 요청 시 검토 가능합니다.';if(/준비|공구|렌치|가위/.test(t))return '안전모·안전화·방진복·장갑 등 보호구와 현장 공구는 회사가 지급·준비합니다. 개인 공구(렌치·가위 등)가 손에 익었다면 가져오셔도 되지만 필수는 아니며, 일급과는 관계없습니다.';if(/근무시간|근무일|요일|평일|주말|토요일|일요일|몇 시|몇시/.test(t))return '근무일은 평일(월~금) 중에서 매주 확정해 문자로 안내합니다(일정에 따라 연속 근무 가능). 근무시간은 08:30~17:30(사업장마다 상이), 휴게시간은 1시간이며, 잔업·주말 근무 여부는 담당자 확인이 필요합니다.';if(/근무지|지역|어디/.test(t))return '모집 지역은 둔포·천안·직산(사업장마다 상이)입니다. 실제 배치 주소는 담당자가 확인해 안내합니다.';if(/하는 일|업무|조립/.test(t))return '반도체 자동화설비 조립·제작 업무입니다. LK 테크 채용 공고이며, 삼성 직접 채용 공고가 아닙니다.';if(/초보|경력/.test(t))return '초보 지원이 가능합니다. 성실한 출근과 근태를 중요하게 봅니다. 채용과 출근 확정은 담당자가 안내합니다.';return null;}
 
 /* ===== 인력 관리: 작업자 명부 · 숙련 단계별 일급 · 월간 정산 ===== */
 const SCHEMA = {
