@@ -136,3 +136,9 @@ assert.ok(!ids('상담기록').includes('guest:old'));assert.equal(ids('상담�
 assert.ok(!ids('관리자신청').includes('google:gone@example.com'));assert.ok(ids('관리자신청').includes('google:keep@example.com'));
 assert.equal(ctx.purge_(false),null,'runs once per day');
 console.log('PASS: 6-month retention purge');}
+{const t1='7'.repeat(64),t2='8'.repeat(64);
+call('apply',{name:'경로일',phone:'010-7777-0001',consent:true,source:'당근'},'POST',t1);
+call('apply',{name:'경로이',phone:'010-7777-0002',consent:true,source:'=HYPERLINK("x")<b>긴이름이름이름이름이름이름이름이름'},'POST',t2);
+const rows=data.get('작업자신청');assert.equal(rows[0][12],'유입경로');assert.equal(rows.at(-2)[12],'당근');assert.equal(rows.at(-1)[12],'HYPERLINKxb긴이름이름이름이름');assert.ok(rows.at(-1)[12].length<=20);
+const ap=call('workers',{},'GET',tokenA,OWN).applicants;assert.equal(ap.find(a=>a.name==='경로일').source,'당근');assert.equal(ap.find(a=>a.name==='설문자').source,'','older rows without a source stay blank');
+console.log('PASS: applicant source channel recorded');}
